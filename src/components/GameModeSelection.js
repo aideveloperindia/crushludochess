@@ -51,6 +51,12 @@ const GameModeSelection = ({ onModeSelect }) => {
 
   return (
     <div className="game-mode-selection">
+      <div className="floating-objects">
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+      </div>
       <div className="mode-selection-background">
         <div className="animated-bg">
           <div className="bg-shape bg-shape-1"></div>
@@ -60,8 +66,12 @@ const GameModeSelection = ({ onModeSelect }) => {
         
         <div className="mode-selection-content">
           <div className="mode-header">
-            <h1 className="mode-title">Choose Game Mode</h1>
-            <p className="mode-subtitle">Select how many players will join the game</p>
+            <div className="logo-container">
+              <img src="/crushludochesslogo.png" alt="CrushLudoChess Logo" className="mode-logo" />
+            </div>
+            <h1 className="mode-title">CrushLudoChess</h1>
+            <h2 className="mode-subtitle">Choose Game Mode</h2>
+            <p className="mode-description">Select how many players will join the game</p>
           </div>
 
           <div className="mode-grid">
@@ -96,7 +106,7 @@ const GameModeSelection = ({ onModeSelect }) => {
           </div>
 
           <div className="mode-footer">
-            <p className="footer-text">🎮 Experience the ultimate fusion of Chess and Ludo!</p>
+            <p className="footer-text">CrushLudoChess - The Ultimate 4 Player Game!</p>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import GameInfo from './components/GameInfo';
 import GameModeSelection from './components/GameModeSelection';
+import SplashScreen from './components/SplashScreen';
 
 // Piece types and their values
 const PIECE_VALUES = {
@@ -15,11 +16,11 @@ const PIECE_VALUES = {
 
 // Team colors and positions
 const TEAMS = ['blue', 'red', 'yellow', 'green'];
-const TEAM_COLORS = ['#0066cc', '#cc0000', '#ccaa00', '#00aa00'];
+const TEAM_COLORS = ['#0066cc', '#cc0000', '#ff8c00', '#00aa00']; // Blue, Red, Orange, Green
 
 function App() {
   // Game flow states
-  const [appPhase, setAppPhase] = useState('mode-selection'); // 'mode-selection', 'game'
+  const [appPhase, setAppPhase] = useState('splash'); // 'splash', 'mode-selection', 'game'
   const [selectedGameMode, setSelectedGameMode] = useState(null);
   
   // Game states
@@ -34,6 +35,7 @@ function App() {
   const [gamePhase, setGamePhase] = useState('setup');
   const [turnNumber, setTurnNumber] = useState(1);
   const [isCascading, setIsCascading] = useState(false);
+  const [playerNames, setPlayerNames] = useState(['Player 1', 'Player 2', 'Player 3', 'Player 4']);
 
   // Initialize the game board when game starts
   useEffect(() => {
@@ -567,15 +569,15 @@ function App() {
     while (currentPos !== endPosition && currentProgress < finalProgress) {
       let nextPos;
       
-      if (currentProgress < 31) {
+      if (currentProgress < 32) {
         // Still in full round - move forward on 32-box path
         nextPos = (currentPos + 1) % 32;
-      } else if (currentProgress === 31) {
+      } else if (currentProgress === 32) {
         // Transition from 32-box path to home stretch (Box 1)
         nextPos = 1; // Box 1 (position 1)
       } else {
         // In home stretch - move towards home position
-        const homeStretchMoves = currentProgress - 31;
+        const homeStretchMoves = currentProgress - 32;
         nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
       }
       
@@ -585,6 +587,224 @@ function App() {
       
       // Safety check to prevent infinite loop
       if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Simplified step-by-step movement that works correctly
+  const moveKingStepByStepSimple = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Completely rewritten step-by-step movement
+  const moveKingStepByStepCorrect = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Proper step-by-step movement with correct path calculation
+  const moveKingStepByStepFixed = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
     }
     
     let currentStep = 0;
@@ -627,11 +847,11 @@ function App() {
     const startingPosition = getKingStartingPosition(playerIndex);
     const homePosition = getKingHomePosition(playerIndex);
     
-    if (position >= homePosition) {
-      // In home stretch
-      return 32 + (position - homePosition);
+    if (position >= 1 && position <= 8) {
+      // In home stretch (Box 1-8)
+      return 32 + (position - 1);
     } else {
-      // In full round
+      // In full round (32-box path)
       if (position >= startingPosition) {
         return position - startingPosition;
       } else {
@@ -674,7 +894,7 @@ function App() {
         newPosition = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
       } else {
         // Victory! (40 moves)
-        newPosition = homePosition;
+        newPosition = 8; // Final home position (Box 8)
       }
       
       console.log(`King moving from position ${currentPosition} to ${newPosition}, progress: ${newProgress}`);
@@ -691,7 +911,7 @@ function App() {
         newKingProgress[playerIndex] = 0; // Reset progress when killed
       } else {
         // Safe move - move step by step
-        moveKingStepByStep(playerIndex, currentPosition, newPosition, newProgress);
+        moveKingStepByStepFixed(playerIndex, currentPosition, newPosition, newProgress);
         return false; // Don't continue with normal flow
       }
     }
@@ -813,14 +1033,34 @@ function App() {
   };
 
   // Game flow handlers
+  const handleSplashComplete = () => {
+    setAppPhase('mode-selection');
+  };
+
   const handleModeSelect = (mode) => {
     setSelectedGameMode(mode);
+    setAppPhase('game-splash');
+  };
+
+  const handleGameSplashComplete = () => {
     setAppPhase('game');
   };
 
   const handleBackToMenu = () => {
     setAppPhase('mode-selection');
     setSelectedGameMode(null);
+    // Reset game state when going back to menu
+    setBoard([]);
+    setKingPositions([0, 8, 16, 24]);
+    setCascadeHighlights([]);
+    setCurrentPlayer(0);
+    setSelectedPiece(null);
+    setPlayerPoints([0, 0, 0, 0]);
+    setKingProgress([0, 0, 0, 0]);
+    setPawnCaptures([0, 0, 0, 0]);
+    setGamePhase('setup');
+    setTurnNumber(1);
+    setIsCascading(false);
   };
 
   // AI Player Logic
@@ -886,16 +1126,36 @@ function App() {
   }, [currentPlayer, appPhase, isCascading]);
 
   // Render based on app phase
+  if (appPhase === 'splash') {
+    return <SplashScreen onComplete={handleSplashComplete} />;
+  }
+  
   if (appPhase === 'mode-selection') {
     return <GameModeSelection onModeSelect={handleModeSelect} />;
+  }
+  
+  if (appPhase === 'game-splash') {
+    return (
+      <SplashScreen 
+        onComplete={handleGameSplashComplete}
+                  title={`${selectedGameMode?.title || 'CrushLudoChess'}`}
+        subtitle="Game Starting..."
+      />
+    );
   }
 
   return (
     <div className="App">
+      <div className="floating-objects">
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+        <div className="floating-object"></div>
+      </div>
       <header className="App-header">
         <div className="header-content">
-          <img src="/crushludochesslogo.png" alt="CRUSHLUDOCHESS Logo" className="game-logo" />
-          <h1>🎮 CRUSHLUDOCHESS</h1>
+          <img src="/crushludochesslogo.png" alt="CrushLudoChess Logo" className="game-logo" />
+          <h1>CrushLudoChess</h1>
           {selectedGameMode && (
             <div className="game-mode-indicator">
               {selectedGameMode.title}
@@ -903,25 +1163,6 @@ function App() {
           )}
         </div>
         {isCascading && <div className="cascading-indicator">Cascading...</div>}
-        <div className="game-info">
-          <p>
-            Turn: {turnNumber} | Current Player: 
-            <span style={{color: TEAM_COLORS[currentPlayer]}}>
-              {TEAMS[currentPlayer].toUpperCase()}
-              {isAIPlayer(currentPlayer) && ' 🤖'}
-            </span>
-          </p>
-          {selectedGameMode && (
-            <div className="player-status">
-              {TEAMS.map((team, index) => (
-                <span key={team} style={{color: TEAM_COLORS[index], marginRight: '10px'}}>
-                  {team.toUpperCase()}{isAIPlayer(index) ? ' 🤖' : ' 👤'}
-                  {index === 0 && ' (You)'}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
         <button className="back-to-menu-btn" onClick={handleBackToMenu}>
           ← Back to Menu
         </button>
@@ -1051,6 +1292,101 @@ function App() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Player Name Inputs and Stats */}
+        <div className="player-panels">
+          {/* Blue Player Panel (Bottom) */}
+          <div className={`player-panel blue-panel ${currentPlayer === 0 ? 'current-turn' : ''}`}>
+            <div className="player-header">
+              <div className="player-color" style={{backgroundColor: TEAM_COLORS[0]}}></div>
+              <input 
+                type="text" 
+                value={playerNames[0]} 
+                onChange={(e) => {
+                  const newNames = [...playerNames];
+                  newNames[0] = e.target.value;
+                  setPlayerNames(newNames);
+                }}
+                className="player-name-input"
+                placeholder="Blue Player Name"
+              />
+            </div>
+            <div className="player-stats">
+              <div className="stat">Points: {playerPoints[0]}</div>
+              <div className="stat">Progress: {kingProgress[0]}/40</div>
+              <div className="stat">Pawn Captures: {pawnCaptures[0]}</div>
+            </div>
+          </div>
+
+          {/* Red Player Panel (Right) */}
+          <div className={`player-panel red-panel ${currentPlayer === 1 ? 'current-turn' : ''}`}>
+            <div className="player-header">
+              <div className="player-color" style={{backgroundColor: TEAM_COLORS[1]}}></div>
+              <input 
+                type="text" 
+                value={playerNames[1]} 
+                onChange={(e) => {
+                  const newNames = [...playerNames];
+                  newNames[1] = e.target.value;
+                  setPlayerNames(newNames);
+                }}
+                className="player-name-input"
+                placeholder="Red Player Name"
+              />
+            </div>
+            <div className="player-stats">
+              <div className="stat">Points: {playerPoints[1]}</div>
+              <div className="stat">Progress: {kingProgress[1]}/40</div>
+              <div className="stat">Pawn Captures: {pawnCaptures[1]}</div>
+            </div>
+          </div>
+
+          {/* Yellow Player Panel (Top) */}
+          <div className={`player-panel yellow-panel ${currentPlayer === 2 ? 'current-turn' : ''}`}>
+            <div className="player-header">
+              <div className="player-color" style={{backgroundColor: TEAM_COLORS[2]}}></div>
+              <input 
+                type="text" 
+                value={playerNames[2]} 
+                onChange={(e) => {
+                  const newNames = [...playerNames];
+                  newNames[2] = e.target.value;
+                  setPlayerNames(newNames);
+                }}
+                className="player-name-input"
+                placeholder="Yellow Player Name"
+              />
+            </div>
+            <div className="player-stats">
+              <div className="stat">Points: {playerPoints[2]}</div>
+              <div className="stat">Progress: {kingProgress[2]}/40</div>
+              <div className="stat">Pawn Captures: {pawnCaptures[2]}</div>
+            </div>
+          </div>
+
+          {/* Green Player Panel (Left) */}
+          <div className={`player-panel green-panel ${currentPlayer === 3 ? 'current-turn' : ''}`}>
+            <div className="player-header">
+              <div className="player-color" style={{backgroundColor: TEAM_COLORS[3]}}></div>
+              <input 
+                type="text" 
+                value={playerNames[3]} 
+                onChange={(e) => {
+                  const newNames = [...playerNames];
+                  newNames[3] = e.target.value;
+                  setPlayerNames(newNames);
+                }}
+                className="player-name-input"
+                placeholder="Green Player Name"
+              />
+            </div>
+            <div className="player-stats">
+              <div className="stat">Points: {playerPoints[3]}</div>
+              <div className="stat">Progress: {kingProgress[3]}/40</div>
+              <div className="stat">Pawn Captures: {pawnCaptures[3]}</div>
+            </div>
           </div>
         </div>
 
