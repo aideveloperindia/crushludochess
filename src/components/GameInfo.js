@@ -23,7 +23,6 @@ const GameInfo = ({ currentPlayer, turnNumber, gamePhase, isCascading, teams }) 
         <h3>Game Status</h3>
         <p>Turn: {turnNumber}</p>
         <p>Phase: {gamePhase}</p>
-        {isCascading && <p className="cascading-status">🔄 Cascading in progress...</p>}
       </div>
       
       <div className="how-to-play">

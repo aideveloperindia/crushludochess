@@ -17,8 +17,8 @@ const GameModeSelection = ({ onModeSelect }) => {
     {
       id: '2player',
       title: '2 Player Game',
-      description: 'You (Blue) + Friend (Red) vs 2 AI Players',
-      players: ['You (Blue)', 'Friend (Red)', 'AI (Yellow)', 'AI (Green)'],
+      description: 'You (Blue) + Friend (Yellow) vs 2 AI Players',
+      players: ['You (Blue)', 'AI (Red)', 'Friend (Yellow)', 'AI (Green)'],
       icon: '👥',
       color: '#45b7d1'
     },
@@ -26,7 +26,7 @@ const GameModeSelection = ({ onModeSelect }) => {
       id: '3player',
       title: '3 Player Game',
       description: 'You (Blue) + 2 Friends vs 1 AI Player',
-      players: ['You (Blue)', 'Friend 1 (Red)', 'Friend 2 (Yellow)', 'AI (Green)'],
+      players: ['You (Blue)', 'AI (Red)', 'Friend 1 (Yellow)', 'Friend 2 (Green)'],
       icon: '👨‍👩‍👧',
       color: '#96ceb4'
     },
@@ -52,10 +52,9 @@ const GameModeSelection = ({ onModeSelect }) => {
   return (
     <div className="game-mode-selection">
       <div className="floating-objects">
-        <div className="floating-object"></div>
-        <div className="floating-object"></div>
-        <div className="floating-object"></div>
-        <div className="floating-object"></div>
+        {Array(40).fill(null).map((_, index) => (
+          <div key={index} className="floating-object"></div>
+        ))}
       </div>
       <div className="mode-selection-background">
         <div className="animated-bg">
