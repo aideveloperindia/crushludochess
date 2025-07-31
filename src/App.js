@@ -72,8 +72,25 @@ function App() {
       }
       
       audio.volume = 0.5;
-      audio.play().catch((error) => {
+      audio.preload = 'auto';
+      
+      // Add event listeners for better debugging
+      audio.addEventListener('canplaythrough', () => {
+        console.log(`Audio loaded successfully: ${soundType}`);
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.log(`Audio error for ${soundType}:`, e);
+      });
+      
+      audio.play().then(() => {
+        console.log(`Sound played successfully: ${soundType}`);
+      }).catch((error) => {
         console.log('Audio playback failed:', error);
+        // Try to play without user interaction (for background music)
+        if (soundType === 'background') {
+          console.log('Attempting to play background music...');
+        }
       });
     } catch (error) {
       console.log('Audio not supported:', error);
@@ -97,9 +114,28 @@ function App() {
       const audio = new Audio('/audio/background music.mp3');
       audio.loop = true;
       audio.volume = 0.3;
+      audio.preload = 'auto';
       
+      // Add event listeners for better debugging
+      audio.addEventListener('canplaythrough', () => {
+        console.log('Background music loaded successfully');
+        // Try to play when loaded
+        audio.play().then(() => {
+          setBackgroundAudio(audio);
+          console.log('Background music started successfully');
+        }).catch((error) => {
+          console.log('Background music playback failed:', error);
+        });
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.log('Background music error:', e);
+      });
+      
+      // Also try to play immediately
       audio.play().then(() => {
         setBackgroundAudio(audio);
+        console.log('Background music started successfully');
       }).catch((error) => {
         console.log('Background music playback failed:', error);
       });
@@ -108,34 +144,50 @@ function App() {
     }
   }, [isBackgroundMusicEnabled]);
 
-  // Control background music based on mute state
+  // Consolidated background music control
   useEffect(() => {
-    if (!isBackgroundMusicEnabled && backgroundAudio) {
-      backgroundAudio.pause();
-      backgroundAudio.currentTime = 0;
-      setBackgroundAudio(null);
-    } else if (isBackgroundMusicEnabled && appPhase === 'game' && !backgroundAudio) {
-      playBackgroundMusic();
-    }
-  }, [isBackgroundMusicEnabled, appPhase, backgroundAudio, playBackgroundMusic]);
-
-  // Stop background music when disabled
-  useEffect(() => {
-    if (backgroundAudio) {
-      if (!isBackgroundMusicEnabled) {
+    if (appPhase === 'game') {
+      if (isBackgroundMusicEnabled && !backgroundAudio) {
+        // Start music when game begins and music is enabled
+        playBackgroundMusic();
+      } else if (!isBackgroundMusicEnabled && backgroundAudio) {
+        // Pause music when muted (don't destroy the instance)
+        backgroundAudio.pause();
+      }
+    } else {
+      // Stop music when not in game
+      if (backgroundAudio) {
         backgroundAudio.pause();
         backgroundAudio.currentTime = 0;
-      } else {
-        backgroundAudio.play().catch(() => {});
+        setBackgroundAudio(null);
       }
     }
-  }, [isBackgroundMusicEnabled, backgroundAudio]);
+  }, [isBackgroundMusicEnabled, appPhase, backgroundAudio, playBackgroundMusic]);
 
   // Fix music button click handler - prevent event bubbling
   const handleMusicToggle = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsBackgroundMusicEnabled(!isBackgroundMusicEnabled);
+    
+    const newMusicState = !isBackgroundMusicEnabled;
+    setIsBackgroundMusicEnabled(newMusicState);
+    
+    // Immediately handle the music state change
+    if (!newMusicState && backgroundAudio) {
+      // Muting - pause the current audio (don't destroy it)
+      backgroundAudio.pause();
+      console.log('Music muted');
+    } else if (newMusicState && backgroundAudio) {
+      // Unmuting - resume the existing audio
+      backgroundAudio.play().catch((error) => {
+        console.log('Failed to resume music:', error);
+      });
+      console.log('Music unmuted');
+    } else if (newMusicState && appPhase === 'game' && !backgroundAudio) {
+      // First time starting music
+      playBackgroundMusic();
+      console.log('Music started for first time');
+    }
   };
 
   // Initialize the game board when game starts
@@ -145,19 +197,7 @@ function App() {
     }
   }, [appPhase]);
 
-  // Separate useEffect for music control - doesn't affect game state
-  useEffect(() => {
-    if (backgroundAudio && appPhase === 'game') {
-      if (isBackgroundMusicEnabled) {
-        backgroundAudio.volume = 1.0;
-        backgroundAudio.play().catch(() => {});
-      } else {
-        backgroundAudio.pause();
-        backgroundAudio.currentTime = 0;
-        backgroundAudio.volume = 0.0;
-      }
-    }
-  }, [isBackgroundMusicEnabled, backgroundAudio, appPhase]);
+
 
   const initializeBoard = () => {
     const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
@@ -225,7 +265,7 @@ function App() {
 
     setBoard(newBoard);
     // Set kings at their starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25
-    setKingPositions([0, 8, 16, 24]); // B1, B9, B17, B25
+    setKingPositions([1, 9, 17, 25]); // B1, B9, B17, B25 (using 1-32 system)
     setKingProgress([0, 0, 0, 0]); // Initialize progress to 0 (not position)
     setPlayerPoints([0, 0, 0, 0]);
     setPawnCaptures([0, 0, 0, 0]);
@@ -920,6 +960,8 @@ function App() {
 
   // NEW: Proper step-by-step movement with correct path calculation
   const moveKingStepByStepFixed = (playerIndex, startPosition, endPosition, finalProgress) => {
+    console.log(`Starting step-by-step movement: ${TEAMS[playerIndex]} king from ${startPosition} to ${endPosition}, final progress: ${finalProgress}`);
+    
     // Calculate the actual path the king should take
     const path = [];
     let currentPos = startPosition;
@@ -931,7 +973,8 @@ function App() {
       
       if (currentProgress < 32) {
         // Still in full round - move forward on 32-box path
-        nextPos = (currentPos + 1) % 32;
+        nextPos = currentPos + 1;
+        if (nextPos > 32) nextPos = 1; // Wrap around from 32 to 1
       } else if (currentProgress === 32) {
         // Transition from 32-box path to home stretch (Box 1)
         nextPos = 1; // Box 1 (position 1)
@@ -943,18 +986,27 @@ function App() {
         nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
       }
       
-      path.push(nextPos);
+      // Ensure we don't add duplicate positions
+      if (path.length === 0 || path[path.length - 1] !== nextPos) {
+        path.push(nextPos);
+      }
+      
       currentPos = nextPos;
       currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
       
       // Safety check to prevent infinite loop
-      if (path.length > 50) break;
+      if (path.length > 50) {
+        console.log('Path too long, breaking loop');
+        break;
+      }
     }
     
     // If no path was built, just move directly to end position
     if (path.length === 0) {
       path.push(endPosition);
     }
+    
+    console.log(`Path calculated: ${path.join(' -> ')}`);
     
     let currentStep = 0;
     
@@ -971,15 +1023,22 @@ function App() {
         newKingProgress[playerIndex] = stepProgress;
         setKingProgress(newKingProgress);
         
+        // Play king movement sound for each step
+        playSound('move');
+        
+        console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${path[currentStep]}, progress: ${stepProgress}`);
+        
         currentStep++;
         
         // Continue to next step after a short delay
-        setTimeout(moveOneStep, 300); // 300ms delay between steps
+        setTimeout(moveOneStep, 300); // 300ms delay between steps for smooth visual effect
       } else {
         // Update final progress
         const newKingProgress = [...kingProgress];
         newKingProgress[playerIndex] = finalProgress;
         setKingProgress(newKingProgress);
+        
+        console.log(`Step-by-step movement completed for ${TEAMS[playerIndex]} king`);
         
         // Check for victory
         if (finalProgress >= 40) {
@@ -993,26 +1052,25 @@ function App() {
     moveOneStep();
   };
 
-  // Helper function to calculate progress from position
+  // Helper function to calculate progress from position (1-40 system)
   const calculateProgressFromPosition = (playerIndex, position) => {
     const startingPosition = getKingStartingPosition(playerIndex);
-    const homePosition = getKingHomePosition(playerIndex);
     
     if (position >= 1 && position <= 8) {
-      // In home stretch (Box 1-8)
-      return 32 + (position - 1);
+      // In home stretch (Box 1-8) - progress 33-40
+      return 32 + position; // Box 1 = progress 33, Box 8 = progress 40
     } else {
-      // In full round (32-box path)
+      // In full round (32-box path) - progress 1-32
       if (position >= startingPosition) {
-        return position - startingPosition;
+        return position - startingPosition + 1; // Starting position = progress 1
       } else {
         // Wrapped around
-        return (32 - startingPosition) + position;
+        return (32 - startingPosition) + position + 1;
       }
     }
   };
 
-  // FIXED: Hard coded king movement logic
+  // FIXED: Proper Ludo-style king movement logic
   const moveKingBasedOnPoints = (playerIndex, pointsEarned) => {
     console.log(`Moving king for ${TEAMS[playerIndex]}, points earned: ${pointsEarned}`);
     
@@ -1027,29 +1085,31 @@ function App() {
     if (stepsToMove > 0) {
       const currentPosition = kingPositions[playerIndex];
       const startingPosition = getKingStartingPosition(playerIndex);
-      const homePosition = getKingHomePosition(playerIndex);
       
       // Calculate new progress (total moves made)
       const newProgress = newKingProgress[playerIndex] + stepsToMove;
       
       let newPosition;
       
-      if (newProgress < 32) {
-        // Still in full round phase (0-31 moves)
+      if (newProgress <= 32) {
+        // Still in full round phase (1-32 progress)
         // Calculate position on the 32-box path
-        newPosition = (startingPosition + newProgress) % 32;
-      } else if (newProgress < 40) {
-        // Home stretch phase (32-39 moves)
+        newPosition = startingPosition + newProgress - 1;
+        if (newPosition > 32) {
+          newPosition = newPosition - 32; // Wrap around
+        }
+      } else if (newProgress <= 40) {
+        // Home stretch phase (33-40 progress)
         // After 32 boxes, continue from Box 1 onwards
         const homeStretchMoves = newProgress - 32;
-        newPosition = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+        newPosition = homeStretchMoves; // Box 1 (position 1), Box 2 (position 2), etc.
         
         // Play 32-box completion sound when entering home stretch
-        if (newKingProgress[playerIndex] < 32 && newProgress >= 32) {
+        if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
           playSound('32-box-complete');
         }
       } else {
-        // Victory! (40 moves)
+        // Victory! (40+ progress)
         newPosition = 8; // Final home position (Box 8)
       }
       
@@ -1181,13 +1241,13 @@ function App() {
   };
 
   const getKingStartingPosition = (teamIndex) => {
-    // Starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25
+    // Starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25 (using 1-32 system)
     switch (teamIndex) {
-      case 0: return 0; // Blue: B1
-      case 1: return 8; // Red: B9
-      case 2: return 16; // Yellow: B17
-      case 3: return 24; // Green: B25
-      default: return 0;
+      case 0: return 1; // Blue: B1
+      case 1: return 9; // Red: B9
+      case 2: return 17; // Yellow: B17
+      case 3: return 25; // Green: B25
+      default: return 1;
     }
   };
 
@@ -1224,7 +1284,7 @@ function App() {
     setSelectedGameMode(null);
     // Reset game state when going back to menu
     setBoard([]);
-    setKingPositions([0, 8, 16, 24]);
+    setKingPositions([1, 9, 17, 25]); // Using 1-32 system
     setCascadeHighlights([]);
     setCurrentPlayer(0);
     setSelectedPiece(null);
