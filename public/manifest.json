@@ -1,0 +1,20 @@
+{
+  "short_name": "CrushLudoChess",
+  "name": "CrushLudoChess - 4 Player Chess Game",
+  "icons": [
+    {
+      "src": "crushludochessfavicon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "crushludochesslogo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0066cc",
+  "background_color": "#f8bbd9"
+}

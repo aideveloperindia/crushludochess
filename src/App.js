@@ -1,154 +1,322 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
+import GameModeSelection from './components/GameModeSelection';
+import SplashScreen from './components/SplashScreen';
+
+// Piece types and their values
+const PIECE_VALUES = {
+  'queen': 6,
+  'rook': 5,
+  'bishop': 4,
+  'knight': 3,
+  'pawn': 2, // First pawn capture = 2 points
+  'king': 0 // Kings don't have capture value
+};
+
+// Team colors and positions
+const TEAMS = ['blue', 'red', 'yellow', 'green'];
+const TEAM_COLORS = ['#0066cc', '#cc0000', '#ff8c00', '#00aa00']; // Blue, Red, Orange, Green
 
 function App() {
+  // Game flow states
+  const [appPhase, setAppPhase] = useState('splash'); // 'splash', 'mode-selection', 'game'
+  const [selectedGameMode, setSelectedGameMode] = useState(null);
+  
+  // Game states
   const [board, setBoard] = useState([]);
-  const [currentPlayer, setCurrentPlayer] = useState('blue');
-  const [playerPoints, setPlayerPoints] = useState({
-    blue: 0, red: 0, yellow: 0, green: 0
-  });
-  const [kingPositions, setKingPositions] = useState({
-    blue: 1, red: 9, yellow: 17, green: 25
-  });
-  const [kingProgress, setKingProgress] = useState({
-    blue: 0, red: 0, yellow: 0, green: 0
-  });
-  const [turn, setTurn] = useState(1);
-  const [gamePhase, setGamePhase] = useState('playing');
-  const [isCascading, setIsCascading] = useState(false);
-  const [cascadeHighlights, setCascadeHighlights] = useState([]);
+  const [kingPositions, setKingPositions] = useState([0, 8, 16, 24]); // B1, B9, B17, B25
+  const [cascadeHighlights, setCascadeHighlights] = useState([]); // For showing cascade boxes
+  const [currentPlayer, setCurrentPlayer] = useState(0);
   const [selectedPiece, setSelectedPiece] = useState(null);
-  const [validMoves, setValidMoves] = useState([]);
+  const [playerPoints, setPlayerPoints] = useState([0, 0, 0, 0]);
+  const [kingProgress, setKingProgress] = useState([0, 0, 0, 0]);
+  const [pawnCaptures, setPawnCaptures] = useState([0, 0, 0, 0]); // Track pawn captures per player
+  const [gamePhase, setGamePhase] = useState('setup');
 
-  // Initialize the game board
-  useEffect(() => {
-    initializeBoard();
-  }, []);
+  const [isCascading, setIsCascading] = useState(false);
+  const [playerNames, setPlayerNames] = useState(['Player 1', 'Player 2', 'Player 3', 'Player 4']);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [isBackgroundMusicEnabled, setIsBackgroundMusicEnabled] = useState(true);
 
-  const initializeBoard = () => {
-    const newBoard = [];
-    const pieces = generateRandomPieces();
+  // Audio functions using actual audio files
+  const playSound = (soundType) => {
+    if (!isSoundEnabled) return;
     
-    console.log('Initializing board with', pieces.length, 'pieces');
-    
-    for (let row = 0; row < 8; row++) {
-      const boardRow = [];
-      for (let col = 0; col < 8; col++) {
-        const pieceIndex = row * 8 + col;
-        const piece = pieces[pieceIndex];
-        
-        if (!piece) {
-          console.error(`ERROR: No piece at index ${pieceIndex} (row ${row}, col ${col})`);
-        }
-        
-        boardRow.push(piece);
+    try {
+      const audio = new Audio();
+      
+      switch (soundType) {
+        case 'move':
+          audio.src = '/audio/king movement sound.wav';
+          break;
+        case 'capture':
+          audio.src = '/audio/capture sound.ogg';
+          break;
+        case 'queen-capture':
+          audio.src = '/audio/queen kill sound.mp3';
+          break;
+        case 'king-capture':
+          audio.src = '/audio/king kill sound.mp3';
+          break;
+        case 'cascade':
+          audio.src = '/audio/capture sound.ogg';
+          break;
+        case '32-box-complete':
+          audio.src = '/audio/32 box sound.wav';
+          break;
+        case 'victory':
+          audio.src = '/audio/victory sound.mp3';
+          break;
+        default:
+          return;
       }
-      newBoard.push(boardRow);
+      
+      audio.volume = 0.5;
+      audio.preload = 'auto';
+      
+      // Add event listeners for better debugging
+      audio.addEventListener('canplaythrough', () => {
+        console.log(`Audio loaded successfully: ${soundType}`);
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.log(`Audio error for ${soundType}:`, e);
+      });
+      
+      audio.play().then(() => {
+        console.log(`Sound played successfully: ${soundType}`);
+      }).catch((error) => {
+        console.log('Audio playback failed:', error);
+        // Try to play without user interaction (for background music)
+        if (soundType === 'background') {
+          console.log('Attempting to play background music...');
+        }
+      });
+    } catch (error) {
+      console.log('Audio not supported:', error);
     }
-    
-    console.log('Board initialized with', newBoard.flat().filter(p => p).length, 'pieces');
-    setBoard(newBoard);
   };
 
-  const generateRandomPieces = () => {
-    const teams = ['blue', 'red', 'yellow', 'green'];
-    const pieceTypes = ['king', 'queen', 'rook', 'rook', 'bishop', 'bishop', 'knight', 'knight', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn'];
+  // Fix sound button handler - prevent event bubbling
+  const handleSoundToggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSoundEnabled(!isSoundEnabled);
+  };
+
+  // Background music with proper mute control
+  const [backgroundAudio, setBackgroundAudio] = useState(null);
+  
+  const playBackgroundMusic = useCallback(() => {
+    if (!isBackgroundMusicEnabled) return;
     
-    const allPieces = [];
-    
-    teams.forEach(team => {
-      pieceTypes.forEach(type => {
-        allPieces.push({
-          type: type,
-          team: team,
-          id: `${team}-${type}-${Math.random().toString(36).substr(2, 9)}`
+    try {
+      const audio = new Audio('/audio/background music.mp3');
+      audio.loop = true;
+      audio.volume = 0.3;
+      audio.preload = 'auto';
+      
+      // Add event listeners for better debugging
+      audio.addEventListener('canplaythrough', () => {
+        console.log('Background music loaded successfully');
+        // Try to play when loaded
+        audio.play().then(() => {
+          setBackgroundAudio(audio);
+          console.log('Background music started successfully');
+        }).catch((error) => {
+          console.log('Background music playback failed:', error);
         });
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.log('Background music error:', e);
+      });
+      
+      // Also try to play immediately
+      audio.play().then(() => {
+        setBackgroundAudio(audio);
+        console.log('Background music started successfully');
+      }).catch((error) => {
+        console.log('Background music playback failed:', error);
+      });
+    } catch (error) {
+      console.log('Background music not supported:', error);
+    }
+  }, [isBackgroundMusicEnabled]);
+
+  // Consolidated background music control
+  useEffect(() => {
+    if (appPhase === 'game') {
+      if (isBackgroundMusicEnabled && !backgroundAudio) {
+        // Start music when game begins and music is enabled
+        playBackgroundMusic();
+      } else if (!isBackgroundMusicEnabled && backgroundAudio) {
+        // Pause music when muted (don't destroy the instance)
+        backgroundAudio.pause();
+      }
+    } else {
+      // Stop music when not in game
+      if (backgroundAudio) {
+        backgroundAudio.pause();
+        backgroundAudio.currentTime = 0;
+        setBackgroundAudio(null);
+      }
+    }
+  }, [isBackgroundMusicEnabled, appPhase, backgroundAudio, playBackgroundMusic]);
+
+  // Fix music button click handler - prevent event bubbling
+  const handleMusicToggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const newMusicState = !isBackgroundMusicEnabled;
+    setIsBackgroundMusicEnabled(newMusicState);
+    
+    // Immediately handle the music state change
+    if (!newMusicState && backgroundAudio) {
+      // Muting - pause the current audio (don't destroy it)
+      backgroundAudio.pause();
+      console.log('Music muted');
+    } else if (newMusicState && backgroundAudio) {
+      // Unmuting - resume the existing audio
+      backgroundAudio.play().catch((error) => {
+        console.log('Failed to resume music:', error);
+      });
+      console.log('Music unmuted');
+    } else if (newMusicState && appPhase === 'game' && !backgroundAudio) {
+      // First time starting music
+      playBackgroundMusic();
+      console.log('Music started for first time');
+    }
+  };
+
+  // Initialize the game board when game starts
+  useEffect(() => {
+    if (appPhase === 'game') {
+      initializeBoard();
+    }
+  }, [appPhase]);
+
+
+
+  const initializeBoard = () => {
+    const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+    
+    // Define queen starting positions for each team
+    const queenPositions = [
+      { row: 6, col: 3, teamIndex: 0 }, // Blue queen
+      { row: 3, col: 6, teamIndex: 1 }, // Red queen  
+      { row: 1, col: 3, teamIndex: 2 }, // Yellow queen
+      { row: 3, col: 1, teamIndex: 3 }  // Green queen
+    ];
+    
+    // Place queens and their surrounding pawns
+    queenPositions.forEach(({ row, col, teamIndex }) => {
+      // Place queen
+      newBoard[row][col] = { type: 'queen', team: TEAMS[teamIndex], teamIndex };
+      
+      // Place 4 pawns around the queen (left, right, above, below)
+      const pawnPositions = [
+        { row: row, col: col - 1 },     // Left
+        { row: row, col: col + 1 },     // Right
+        { row: row - 1, col: col },     // Above
+        { row: row + 1, col: col }      // Below
+      ];
+      
+      pawnPositions.forEach(({ row: pawnRow, col: pawnCol }) => {
+        if (pawnRow >= 0 && pawnRow < 8 && pawnCol >= 0 && pawnCol < 8) {
+          newBoard[pawnRow][pawnCol] = { type: 'pawn', team: TEAMS[teamIndex], teamIndex };
+        }
       });
     });
     
-    // Ensure we have exactly 64 pieces
-    console.log('Generated pieces count:', allPieces.length);
+    // Create remaining pieces for each team (excluding queens and their pawns)
+    const remainingPieces = [];
+    TEAMS.forEach((team, teamIndex) => {
+      // Each team gets: 2 Rooks, 2 Bishops, 2 Knights, 5 Pawns (queen + 4 pawns already placed)
+      const teamPieces = [
+        { type: 'rook', team, teamIndex },
+        { type: 'rook', team, teamIndex },
+        { type: 'bishop', team, teamIndex },
+        { type: 'bishop', team, teamIndex },
+        { type: 'knight', team, teamIndex },
+        { type: 'knight', team, teamIndex },
+        { type: 'pawn', team, teamIndex },
+        { type: 'pawn', team, teamIndex },
+        { type: 'pawn', team, teamIndex },
+        { type: 'pawn', team, teamIndex },
+        { type: 'pawn', team, teamIndex }
+      ];
+      remainingPieces.push(...teamPieces);
+    });
+
+    // Fill remaining empty squares with shuffled pieces
+    const shuffledPieces = remainingPieces.sort(() => Math.random() - 0.5);
+    let pieceIndex = 0;
     
-    // Shuffle pieces randomly
-    for (let i = allPieces.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [allPieces[i], allPieces[j]] = [allPieces[j], allPieces[i]];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if (!newBoard[row][col] && pieceIndex < shuffledPieces.length) {
+          newBoard[row][col] = shuffledPieces[pieceIndex];
+          pieceIndex++;
+        }
+      }
     }
-    
-    // Double-check we have 64 pieces
-    if (allPieces.length !== 64) {
-      console.error('ERROR: Not enough pieces! Expected 64, got', allPieces.length);
-    }
-    
-    return allPieces;
+
+    setBoard(newBoard);
+    // Set kings at their starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25
+    setKingPositions([1, 9, 17, 25]); // B1, B9, B17, B25 (using 1-32 system)
+    setKingProgress([0, 0, 0, 0]); // Initialize progress to 0 (not position)
+    setPlayerPoints([0, 0, 0, 0]);
+    setPawnCaptures([0, 0, 0, 0]);
+    setCurrentPlayer(0); // Always start with Blue player (index 0)
+    setGamePhase('playing');
   };
 
-  // Chess movement validation
-  const isValidMove = (piece, fromRow, fromCol, toRow, toCol, board) => {
+  // NEW PAWN MOVEMENT LOGIC
+  const isValidPawnMove = (fromRow, fromCol, toRow, toCol, piece) => {
     const rowDiff = toRow - fromRow;
     const colDiff = toCol - fromCol;
     
-    // Check if destination is within board bounds
-    if (toRow < 0 || toRow >= 8 || toCol < 0 || toCol >= 8) return false;
+    // Team-specific pawn movement directions
+    let forwardDirection;
     
-    // Check if destination has own piece
-    const targetPiece = board[toRow][toCol];
-    if (targetPiece && targetPiece.team === piece.team) return false;
-    
-    switch (piece.type) {
-      case 'pawn':
-        return isValidPawnMove(fromRow, fromCol, toRow, toCol, board, piece.team);
-      case 'rook':
-        return isValidRookMove(fromRow, fromCol, toRow, toCol, board);
-      case 'bishop':
-        return isValidBishopMove(fromRow, fromCol, toRow, toCol, board);
-      case 'queen':
-        return isValidQueenMove(fromRow, fromCol, toRow, toCol, board);
-      case 'king':
-        return isValidKingMove(fromRow, fromCol, toRow, toCol);
-      case 'knight':
-        return isValidKnightMove(fromRow, fromCol, toRow, toCol);
+    switch (piece.teamIndex) {
+      case 0: // Blue - move upward towards Yellow
+        forwardDirection = { row: -1, col: 0 };
+        break;
+      case 1: // Red - move leftward towards Green
+        forwardDirection = { row: 0, col: -1 };
+        break;
+      case 2: // Yellow - move downward towards Blue
+        forwardDirection = { row: 1, col: 0 };
+        break;
+      case 3: // Green - move rightward towards Red
+        forwardDirection = { row: 0, col: 1 };
+        break;
       default:
         return false;
     }
-  };
-
-  const isValidPawnMove = (fromRow, fromCol, toRow, toCol, board, team) => {
-    const rowDiff = toRow - fromRow;
-    const colDiff = toCol - fromCol;
     
-    // Team-specific forward direction
-    let forwardDirection;
-    switch (team) {
-      case 'blue': forwardDirection = -1; break; // up
-      case 'red': forwardDirection = -1; break; // left (but we'll handle this differently)
-      case 'yellow': forwardDirection = 1; break; // down
-      case 'green': forwardDirection = 1; break; // right (but we'll handle this differently)
-      default: return false;
+    // Forward move (no capture)
+    if (rowDiff === forwardDirection.row && colDiff === forwardDirection.col && !board[toRow][toCol]) {
+      return true;
     }
     
-    // For red and green, we need to handle horizontal movement
-    if (team === 'red' || team === 'green') {
-      const colDirection = team === 'red' ? -1 : 1;
-      
-      // Forward move (no capture)
-      if (rowDiff === 0 && colDiff === colDirection && !board[toRow][toCol]) {
-        return true;
-      }
-      
-      // Capture move (diagonal)
-      if (Math.abs(rowDiff) === 1 && colDiff === colDirection && board[toRow][toCol]) {
-        return true;
-      }
+    // Diagonal capture (in forward direction)
+    const diagonalMoves = [];
+    if (forwardDirection.row !== 0) {
+      // Vertical movement - diagonal is horizontal
+      diagonalMoves.push({ row: forwardDirection.row, col: -1 });
+      diagonalMoves.push({ row: forwardDirection.row, col: 1 });
     } else {
-      // Blue and Yellow move vertically
-      // Forward move (no capture)
-      if (colDiff === 0 && rowDiff === forwardDirection && !board[toRow][toCol]) {
-        return true;
-      }
-      
-      // Capture move (diagonal)
-      if (Math.abs(colDiff) === 1 && rowDiff === forwardDirection && board[toRow][toCol]) {
+      // Horizontal movement - diagonal is vertical
+      diagonalMoves.push({ row: -1, col: forwardDirection.col });
+      diagonalMoves.push({ row: 1, col: forwardDirection.col });
+    }
+    
+    for (const diagonal of diagonalMoves) {
+      if (rowDiff === diagonal.row && colDiff === diagonal.col && board[toRow][toCol]) {
         return true;
       }
     }
@@ -156,15 +324,42 @@ function App() {
     return false;
   };
 
-  const isValidRookMove = (fromRow, fromCol, toRow, toCol, board) => {
-    const rowDiff = toRow - fromRow;
-    const colDiff = toCol - fromCol;
+  const isValidMove = (fromRow, fromCol, toRow, toCol, piece) => {
+    if (!piece) return false;
     
-    // Rook moves in straight lines
-    if (rowDiff !== 0 && colDiff !== 0) return false;
+    // Can only move own pieces
+    if (piece.teamIndex !== currentPlayer) return false;
     
-    const rowStep = rowDiff === 0 ? 0 : rowDiff / Math.abs(rowDiff);
-    const colStep = colDiff === 0 ? 0 : colDiff / Math.abs(colDiff);
+    // Can't move to same position
+    if (fromRow === toRow && fromCol === toCol) return false;
+    
+    // Can't capture own pieces
+    const targetPiece = board[toRow][toCol];
+    if (targetPiece && targetPiece.teamIndex === currentPlayer) return false;
+
+    // Implement chess movement rules based on piece type
+    switch (piece.type) {
+      case 'pawn':
+        return isValidPawnMove(fromRow, fromCol, toRow, toCol, piece);
+      case 'rook':
+        return isValidRookMove(fromRow, fromCol, toRow, toCol);
+      case 'bishop':
+        return isValidBishopMove(fromRow, fromCol, toRow, toCol);
+      case 'queen':
+        return isValidQueenMove(fromRow, fromCol, toRow, toCol);
+      case 'knight':
+        return isValidKnightMove(fromRow, fromCol, toRow, toCol);
+      default:
+        return false;
+    }
+  };
+
+  const isValidRookMove = (fromRow, fromCol, toRow, toCol) => {
+    if (fromRow !== toRow && fromCol !== toCol) return false;
+    
+    // Check if path is clear
+    const rowStep = fromRow === toRow ? 0 : (toRow - fromRow) / Math.abs(toRow - fromRow);
+    const colStep = fromCol === toCol ? 0 : (toCol - fromCol) / Math.abs(toCol - fromCol);
     
     let currentRow = fromRow + rowStep;
     let currentCol = fromCol + colStep;
@@ -178,15 +373,11 @@ function App() {
     return true;
   };
 
-  const isValidBishopMove = (fromRow, fromCol, toRow, toCol, board) => {
-    const rowDiff = toRow - fromRow;
-    const colDiff = toCol - fromCol;
+  const isValidBishopMove = (fromRow, fromCol, toRow, toCol) => {
+    if (Math.abs(toRow - fromRow) !== Math.abs(toCol - fromCol)) return false;
     
-    // Bishop moves diagonally
-    if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
-    
-    const rowStep = rowDiff / Math.abs(rowDiff);
-    const colStep = colDiff / Math.abs(colDiff);
+    const rowStep = (toRow - fromRow) / Math.abs(toRow - fromRow);
+    const colStep = (toCol - fromCol) / Math.abs(toCol - fromCol);
     
     let currentRow = fromRow + rowStep;
     let currentCol = fromCol + colStep;
@@ -200,13 +391,9 @@ function App() {
     return true;
   };
 
-  const isValidQueenMove = (fromRow, fromCol, toRow, toCol, board) => {
-    return isValidRookMove(fromRow, fromCol, toRow, toCol, board) || 
-           isValidBishopMove(fromRow, fromCol, toRow, toCol, board);
-  };
-
-  const isValidKingMove = (fromRow, fromCol, toRow, toCol) => {
-    return Math.abs(toRow - fromRow) <= 1 && Math.abs(toCol - fromCol) <= 1;
+  const isValidQueenMove = (fromRow, fromCol, toRow, toCol) => {
+    return isValidRookMove(fromRow, fromCol, toRow, toCol) || 
+           isValidBishopMove(fromRow, fromCol, toRow, toCol);
   };
 
   const isValidKnightMove = (fromRow, fromCol, toRow, toCol) => {
@@ -215,319 +402,778 @@ function App() {
     return (rowDiff === 2 && colDiff === 1) || (rowDiff === 1 && colDiff === 2);
   };
 
-  const getPieceValue = (pieceType) => {
-    const values = {
-      'queen': 6,
-      'rook': 5,
-      'bishop': 4,
-      'knight': 3,
-      'pawn': 2,
-      'king': 1
-    };
-    return values[pieceType] || 1;
+  // NEW CASCADING LOGIC
+  const performCascade = async (currentBoard, capturingPlayer) => {
+    let newBoard = currentBoard.map(row => [...row]);
+    let hasChanges = true;
+    let iterations = 0;
+    
+    console.log(`Starting cascade for ${TEAMS[capturingPlayer]} player...`);
+    
+    while (hasChanges && iterations < 10) {
+      hasChanges = false;
+      iterations++;
+      
+      // Show cascade highlights before each step
+      const highlights = getCascadeHighlights(newBoard, capturingPlayer);
+      setCascadeHighlights(highlights);
+      
+      // Wait to show highlights
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // 1. TEAM-SPECIFIC GRAVITY
+      hasChanges = applyTeamSpecificGravity(newBoard, capturingPlayer) || hasChanges;
+      
+      // 2. PAWN SPAWNING from opposite side
+      hasChanges = spawnPawnsFromOppositeSide(newBoard, capturingPlayer) || hasChanges;
+      
+      // 3. SINGLE AUTO-CAPTURE by next player
+      const nextPlayer = (capturingPlayer + 1) % 4;
+      const autoCaptureHappened = performSingleAutoCapture(newBoard, nextPlayer);
+      hasChanges = autoCaptureHappened || hasChanges;
+      
+      // Update board state
+      setBoard([...newBoard]);
+      
+      // Wait for animation
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    console.log(`Cascade completed in ${iterations} iterations`);
+    setCascadeHighlights([]); // Clear highlights
+    setIsCascading(false);
+    nextTurn();
   };
 
-  const getNextPlayer = (currentPlayer) => {
-    const players = ['blue', 'red', 'yellow', 'green'];
-    const currentIndex = players.indexOf(currentPlayer);
-    return players[(currentIndex + 1) % 4];
+  const applyTeamSpecificGravity = (board, capturingPlayer) => {
+    let hasChanges = false;
+    
+    switch (capturingPlayer) {
+      case 0: // Blue - pieces fall downward
+        for (let col = 0; col < 8; col++) {
+          for (let row = 7; row > 0; row--) {
+            if (!board[row][col] && board[row - 1][col]) {
+              board[row][col] = board[row - 1][col];
+              board[row - 1][col] = null;
+              hasChanges = true;
+            }
+          }
+        }
+        break;
+      case 1: // Red - pieces fall rightward
+        for (let row = 0; row < 8; row++) {
+          for (let col = 7; col > 0; col--) {
+            if (!board[row][col] && board[row][col - 1]) {
+              board[row][col] = board[row][col - 1];
+              board[row][col - 1] = null;
+              hasChanges = true;
+            }
+          }
+        }
+        break;
+      case 2: // Yellow - pieces fall upward
+        for (let col = 0; col < 8; col++) {
+          for (let row = 0; row < 7; row++) {
+            if (!board[row][col] && board[row + 1][col]) {
+              board[row][col] = board[row + 1][col];
+              board[row + 1][col] = null;
+              hasChanges = true;
+            }
+          }
+        }
+        break;
+      case 3: // Green - pieces fall leftward
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 7; col++) {
+            if (!board[row][col] && board[row][col + 1]) {
+              board[row][col] = board[row][col + 1];
+              board[row][col + 1] = null;
+              hasChanges = true;
+            }
+          }
+        }
+        break;
+    }
+    
+    return hasChanges;
   };
 
-  const applyTeamSpecificGravity = (board, capturingTeam) => {
-    const newBoard = board.map(row => [...row]);
+  const spawnPawnsFromOppositeSide = (board, capturingPlayer) => {
+    let hasChanges = false;
     
-    // Team-specific gravity directions
-    const gravityDirections = {
-      'blue': { row: 1, col: 0 }, // down
-      'red': { row: 0, col: 1 }, // right
-      'yellow': { row: -1, col: 0 }, // up
-      'green': { row: 0, col: -1 } // left
-    };
+    switch (capturingPlayer) {
+      case 0: // Blue captures - pawns spawn from TOP
+        for (let col = 0; col < 8; col++) {
+          if (!board[0][col]) {
+            const randomTeam = Math.floor(Math.random() * 4);
+            board[0][col] = { type: 'pawn', team: TEAMS[randomTeam], teamIndex: randomTeam };
+            hasChanges = true;
+          }
+        }
+        break;
+      case 1: // Red captures - pawns spawn from LEFT
+        for (let row = 0; row < 8; row++) {
+          if (!board[row][0]) {
+            const randomTeam = Math.floor(Math.random() * 4);
+            board[row][0] = { type: 'pawn', team: TEAMS[randomTeam], teamIndex: randomTeam };
+            hasChanges = true;
+          }
+        }
+        break;
+      case 2: // Yellow captures - pawns spawn from BOTTOM
+        for (let col = 0; col < 8; col++) {
+          if (!board[7][col]) {
+            const randomTeam = Math.floor(Math.random() * 4);
+            board[7][col] = { type: 'pawn', team: TEAMS[randomTeam], teamIndex: randomTeam };
+            hasChanges = true;
+          }
+        }
+        break;
+      case 3: // Green captures - pawns spawn from RIGHT
+        for (let row = 0; row < 8; row++) {
+          if (!board[row][7]) {
+            const randomTeam = Math.floor(Math.random() * 4);
+            board[row][7] = { type: 'pawn', team: TEAMS[randomTeam], teamIndex: randomTeam };
+            hasChanges = true;
+          }
+        }
+        break;
+    }
     
-    const direction = gravityDirections[capturingTeam];
+    return hasChanges;
+  };
+
+  const getCascadeHighlights = (board, capturingPlayer) => {
+    const highlights = [];
     
-    // Apply gravity
+    // Find empty spaces that will be filled by gravity
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
-        if (newBoard[row][col]) {
-          const newRow = row + direction.row;
-          const newCol = col + direction.col;
+        if (!board[row][col]) {
+          // Check if this empty space will be filled by gravity
+          let willBeFilled = false;
           
-          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && !newBoard[newRow][newCol]) {
-            newBoard[newRow][newCol] = newBoard[row][col];
-            newBoard[row][col] = null;
+          switch (capturingPlayer) {
+            case 0: // Blue - check if piece above will fall down
+              if (row > 0 && board[row - 1][col]) willBeFilled = true;
+              break;
+            case 1: // Red - check if piece to left will fall right
+              if (col > 0 && board[row][col - 1]) willBeFilled = true;
+              break;
+            case 2: // Yellow - check if piece below will fall up
+              if (row < 7 && board[row + 1][col]) willBeFilled = true;
+              break;
+            case 3: // Green - check if piece to right will fall left
+              if (col < 7 && board[row][col + 1]) willBeFilled = true;
+              break;
+          }
+          
+          if (willBeFilled) {
+            highlights.push({ row, col, type: 'gravity' });
           }
         }
       }
     }
     
-    return newBoard;
-  };
-
-  const spawnPawnsFromOppositeSide = (board, capturingTeam) => {
-    const newBoard = board.map(row => [...row]);
-    
-    // Find empty squares on the opposite side
-    const oppositeSide = {
-      'blue': { row: 7, col: 0 }, // bottom row
-      'red': { row: 0, col: 7 }, // right column
-      'yellow': { row: 0, col: 0 }, // top row
-      'green': { row: 0, col: 0 } // left column
-    };
-    
-    const side = oppositeSide[capturingTeam];
-    const pawnsToSpawn = 3; // Spawn 3 pawns
-    
-    for (let i = 0; i < pawnsToSpawn; i++) {
-      let spawnRow, spawnCol;
-      
-      if (capturingTeam === 'blue' || capturingTeam === 'yellow') {
-        // Spawn on top or bottom row
-        spawnRow = side.row;
-        spawnCol = i;
-      } else {
-        // Spawn on left or right column
-        spawnRow = i;
-        spawnCol = side.col;
-      }
-      
-      if (spawnRow < 8 && spawnCol < 8 && !newBoard[spawnRow][spawnCol]) {
-        newBoard[spawnRow][spawnCol] = {
-          type: 'pawn',
-          team: capturingTeam,
-          id: `${capturingTeam}-pawn-${Math.random().toString(36).substr(2, 9)}`
-        };
-      }
+    // Find pawn spawning positions
+    switch (capturingPlayer) {
+      case 0: // Blue captures - pawns spawn from TOP
+        for (let col = 0; col < 8; col++) {
+          if (!board[0][col]) {
+            highlights.push({ row: 0, col, type: 'spawn' });
+          }
+        }
+        break;
+      case 1: // Red captures - pawns spawn from LEFT
+        for (let row = 0; row < 8; row++) {
+          if (!board[row][0]) {
+            highlights.push({ row, col: 0, type: 'spawn' });
+          }
+        }
+        break;
+      case 2: // Yellow captures - pawns spawn from BOTTOM
+        for (let col = 0; col < 8; col++) {
+          if (!board[7][col]) {
+            highlights.push({ row: 7, col, type: 'spawn' });
+          }
+        }
+        break;
+      case 3: // Green captures - pawns spawn from RIGHT
+        for (let row = 0; row < 8; row++) {
+          if (!board[row][7]) {
+            highlights.push({ row, col: 7, type: 'spawn' });
+          }
+        }
+        break;
     }
     
-    return newBoard;
+    return highlights;
   };
 
   const performSingleAutoCapture = (board, nextPlayer) => {
-    const newBoard = board.map(row => [...row]);
-    let captured = false;
+    // Find all pieces that can be captured by next player
+    const captureOpportunities = [];
     
-    // Priority order: Pawn > Knight > Bishop > Rook > Queen
-    const priorityOrder = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
-    
-    for (const pieceType of priorityOrder) {
-      if (captured) break;
-      
-      for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-          const piece = newBoard[row][col];
-          if (piece && piece.type === pieceType && piece.team === nextPlayer) {
-            // Check if this piece can capture any enemy piece
-            for (let targetRow = 0; targetRow < 8; targetRow++) {
-              for (let targetCol = 0; targetCol < 8; targetCol++) {
-                const targetPiece = newBoard[targetRow][targetCol];
-                if (targetPiece && targetPiece.team !== nextPlayer) {
-                  if (isValidMove(piece, row, col, targetRow, targetCol, newBoard)) {
-                    // Perform auto-capture
-                    newBoard[targetRow][targetCol] = piece;
-                    newBoard[row][col] = null;
-                    captured = true;
-                    break;
-                  }
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const targetPiece = board[row][col];
+        if (targetPiece && targetPiece.teamIndex !== nextPlayer) {
+          // Check if any of next player's pieces can capture this
+          for (let fromRow = 0; fromRow < 8; fromRow++) {
+            for (let fromCol = 0; fromCol < 8; fromCol++) {
+              const attackingPiece = board[fromRow][fromCol];
+              if (attackingPiece && attackingPiece.teamIndex === nextPlayer) {
+                if (isValidMove(fromRow, fromCol, row, col, attackingPiece)) {
+                  captureOpportunities.push({
+                    fromRow, fromCol, toRow: row, toCol: col,
+                    attackingPiece, targetPiece
+                  });
                 }
               }
-              if (captured) break;
             }
           }
         }
       }
     }
     
-    return newBoard;
-  };
-
-  const getCascadeHighlights = (board, capturingTeam) => {
-    const highlights = [];
+    if (captureOpportunities.length === 0) return false;
     
-    // Find squares that will be affected by gravity
-    const gravityDirections = {
-      'blue': { row: 1, col: 0 },
-      'red': { row: 0, col: 1 },
-      'yellow': { row: -1, col: 0 },
-      'green': { row: 0, col: -1 }
-    };
+    // Find the capture with highest priority piece
+    const priorityOrder = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
+    let bestCapture = captureOpportunities[0];
     
-    const direction = gravityDirections[capturingTeam];
-    
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        if (board[row][col]) {
-          const newRow = row + direction.row;
-          const newCol = col + direction.col;
-          
-          if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8 && !board[newRow][newCol]) {
-            highlights.push({ row: newRow, col: newCol, type: 'gravity' });
-            highlights.push({ row: row, col: col, type: 'moving' });
-          }
-        }
+    for (const capture of captureOpportunities) {
+      const currentPriority = priorityOrder.indexOf(capture.attackingPiece.type);
+      const bestPriority = priorityOrder.indexOf(bestCapture.attackingPiece.type);
+      if (currentPriority < bestPriority) {
+        bestCapture = capture;
       }
     }
     
-    return highlights;
+    // Perform the single auto-capture
+    board[bestCapture.toRow][bestCapture.toCol] = bestCapture.attackingPiece;
+    board[bestCapture.fromRow][bestCapture.fromCol] = null;
+    
+    // Update points for next player
+    const points = getCapturePoints(bestCapture.targetPiece.type, nextPlayer);
+    const newPoints = [...playerPoints];
+    newPoints[nextPlayer] += points;
+    setPlayerPoints(newPoints);
+    
+    // Update pawn capture count if it's a pawn
+    if (bestCapture.targetPiece.type === 'pawn') {
+      const newPawnCaptures = [...pawnCaptures];
+      newPawnCaptures[nextPlayer]++;
+      setPawnCaptures(newPawnCaptures);
+    }
+    
+    // Move king based on points earned from auto-capture
+    const victoryAchieved = moveKingBasedOnPoints(nextPlayer, points);
+    
+    console.log(`Auto-capture: ${bestCapture.attackingPiece.type} captured ${bestCapture.targetPiece.type}, ${TEAMS[nextPlayer]} king moved`);
+    
+    return true;
   };
 
-  const performCascade = async (board, capturingTeam) => {
-    setIsCascading(true);
+  const handlePieceMove = (fromRow, fromCol, toRow, toCol) => {
+    if (isCascading) return;
     
-    // Get cascade highlights
-    const highlights = getCascadeHighlights(board, capturingTeam);
-    setCascadeHighlights(highlights);
+    const piece = board[fromRow][fromCol];
+    if (!isValidMove(fromRow, fromCol, toRow, toCol, piece)) return;
+
+    const newBoard = board.map(row => [...row]);
+    const capturedPiece = newBoard[toRow][toCol];
     
-    // Wait to show highlights
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // Move piece
+    newBoard[toRow][toCol] = piece;
+    newBoard[fromRow][fromCol] = null;
     
-    // Apply gravity
-    let newBoard = applyTeamSpecificGravity(board, capturingTeam);
-    setBoard(newBoard);
+    // Handle capture
+    if (capturedPiece) {
+      // Play specific sound based on captured piece type
+      if (capturedPiece.type === 'queen') {
+        playSound('queen-capture');
+      } else if (capturedPiece.type === 'king') {
+        playSound('king-capture');
+      } else {
+        playSound('capture');
+      }
+      
+      const points = getCapturePoints(capturedPiece.type, currentPlayer);
+      console.log(`Capture! ${TEAMS[currentPlayer]} captured ${capturedPiece.type} worth ${points} points`);
+      console.log(`Piece values: Queen=6, Rook=5, Bishop=4, Knight=3, Pawn=2/1`);
+      
+      const newPoints = [...playerPoints];
+      newPoints[currentPlayer] += points;
+      setPlayerPoints(newPoints);
+      
+      // Update pawn capture count if it's a pawn
+      if (capturedPiece.type === 'pawn') {
+        const newPawnCaptures = [...pawnCaptures];
+        newPawnCaptures[currentPlayer]++;
+        setPawnCaptures(newPawnCaptures);
+        console.log(`Pawn captures for ${TEAMS[currentPlayer]}: ${newPawnCaptures[currentPlayer]}`);
+      }
+      
+      console.log(`Updated player points:`, newPoints);
+      console.log(`Current king positions before move:`, kingPositions);
+      
+      // Move king immediately based on points earned
+      const victoryAchieved = moveKingBasedOnPoints(currentPlayer, points);
+      
+      if (victoryAchieved) {
+        setBoard(newBoard);
+        return; // Game ends
+      }
+      
+      // Reset points for this player after king has moved
+      newPoints[currentPlayer] = 0;
+      setPlayerPoints(newPoints);
+      
+      // Update board first, then trigger cascading
+      setBoard(newBoard);
+      
+      // Trigger cascading after a short delay
+      setTimeout(() => {
+        setIsCascading(true);
+        performCascade(newBoard, currentPlayer);
+      }, 300);
+    } else {
+      playSound('move');
+      setBoard(newBoard);
+      nextTurn();
+    }
+  };
+
+  // NEW FUNCTION: Move king step by step like Ludo
+  const moveKingStepByStep = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
     
-    // Wait between cascade steps
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
     
-    // Spawn pawns
-    newBoard = spawnPawnsFromOppositeSide(newBoard, capturingTeam);
-    setBoard(newBoard);
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
     
-    // Wait between cascade steps
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    let currentStep = 0;
     
-    // Perform single auto-capture by next player
-    const nextPlayer = getNextPlayer(capturingTeam);
-    newBoard = performSingleAutoCapture(newBoard, nextPlayer);
-    setBoard(newBoard);
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
     
-    // Clear highlights and finish cascading
-    setCascadeHighlights([]);
-    setIsCascading(false);
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Simplified step-by-step movement that works correctly
+  const moveKingStepByStepSimple = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Completely rewritten step-by-step movement
+  const moveKingStepByStepCorrect = (playerIndex, startPosition, endPosition, finalProgress) => {
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = (currentPos + 1) % 32;
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      path.push(nextPos);
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) break;
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps
+      } else {
+        // Final step - set to exact target position and progress
+        const newKingPositions = [...kingPositions];
+        const newKingProgress = [...kingProgress];
+        
+        newKingPositions[playerIndex] = endPosition;
+        newKingProgress[playerIndex] = finalProgress;
+        
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // NEW: Proper step-by-step movement with correct path calculation
+  const moveKingStepByStepFixed = (playerIndex, startPosition, endPosition, finalProgress) => {
+    console.log(`Starting step-by-step movement: ${TEAMS[playerIndex]} king from ${startPosition} to ${endPosition}, final progress: ${finalProgress}`);
+    
+    // Calculate the actual path the king should take
+    const path = [];
+    let currentPos = startPosition;
+    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    
+    // Build the path step by step
+    while (currentPos !== endPosition && currentProgress < finalProgress) {
+      let nextPos;
+      
+      if (currentProgress < 32) {
+        // Still in full round - move forward on 32-box path
+        nextPos = currentPos + 1;
+        if (nextPos > 32) nextPos = 1; // Wrap around from 32 to 1
+      } else if (currentProgress === 32) {
+        // Transition from 32-box path to home stretch (Box 1)
+        nextPos = 1; // Box 1 (position 1)
+        // Play 32-box completion sound
+        playSound('32-box-complete');
+      } else {
+        // In home stretch - move towards home position
+        const homeStretchMoves = currentProgress - 32;
+        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
+      }
+      
+      // Ensure we don't add duplicate positions
+      if (path.length === 0 || path[path.length - 1] !== nextPos) {
+        path.push(nextPos);
+      }
+      
+      currentPos = nextPos;
+      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+      
+      // Safety check to prevent infinite loop
+      if (path.length > 50) {
+        console.log('Path too long, breaking loop');
+        break;
+      }
+    }
+    
+    // If no path was built, just move directly to end position
+    if (path.length === 0) {
+      path.push(endPosition);
+    }
+    
+    console.log(`Path calculated: ${path.join(' -> ')}`);
+    
+    let currentStep = 0;
+    
+    const moveOneStep = () => {
+      if (currentStep < path.length) {
+        // Move to next position in path
+        const newKingPositions = [...kingPositions];
+        newKingPositions[playerIndex] = path[currentStep];
+        setKingPositions(newKingPositions);
+        
+        // Update progress for this step
+        const stepProgress = calculateProgressFromPosition(playerIndex, path[currentStep]);
+        const newKingProgress = [...kingProgress];
+        newKingProgress[playerIndex] = stepProgress;
+        setKingProgress(newKingProgress);
+        
+        // Play king movement sound for each step
+        playSound('move');
+        
+        console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${path[currentStep]}, progress: ${stepProgress}`);
+        
+        currentStep++;
+        
+        // Continue to next step after a short delay
+        setTimeout(moveOneStep, 300); // 300ms delay between steps for smooth visual effect
+      } else {
+        // Update final progress
+        const newKingProgress = [...kingProgress];
+        newKingProgress[playerIndex] = finalProgress;
+        setKingProgress(newKingProgress);
+        
+        console.log(`Step-by-step movement completed for ${TEAMS[playerIndex]} king`);
+        
+        // Check for victory
+        if (finalProgress >= 40) {
+          setGamePhase('victory');
+          playSound('victory');
+        }
+      }
+    };
+    
+    // Start the step-by-step movement
+    moveOneStep();
+  };
+
+  // Helper function to calculate progress from position (1-40 system)
+  const calculateProgressFromPosition = (playerIndex, position) => {
+    const startingPosition = getKingStartingPosition(playerIndex);
+    
+    if (position >= 1 && position <= 8) {
+      // In home stretch (Box 1-8) - progress 33-40
+      return 32 + position; // Box 1 = progress 33, Box 8 = progress 40
+    } else {
+      // In full round (32-box path) - progress 1-32
+      if (position >= startingPosition) {
+        return position - startingPosition + 1; // Starting position = progress 1
+      } else {
+        // Wrapped around
+        return (32 - startingPosition) + position + 1;
+      }
+    }
+  };
+
+  // FIXED: Proper Ludo-style king movement logic
+  const moveKingBasedOnPoints = (playerIndex, pointsEarned) => {
+    console.log(`Moving king for ${TEAMS[playerIndex]}, points earned: ${pointsEarned}`);
+    
+    const newKingPositions = [...kingPositions];
+    const newKingProgress = [...kingProgress];
+    
+    // LUDO-STYLE KING MOVEMENT: Points = Steps
+    const stepsToMove = pointsEarned;
+    
+    console.log(`Steps to move: ${stepsToMove}`);
+    
+    if (stepsToMove > 0) {
+      const currentPosition = kingPositions[playerIndex];
+      const startingPosition = getKingStartingPosition(playerIndex);
+      
+      // Calculate new progress (total moves made)
+      const newProgress = newKingProgress[playerIndex] + stepsToMove;
+      
+      let newPosition;
+      
+      if (newProgress <= 32) {
+        // Still in full round phase (1-32 progress)
+        // Calculate position on the 32-box path
+        newPosition = startingPosition + newProgress - 1;
+        if (newPosition > 32) {
+          newPosition = newPosition - 32; // Wrap around
+        }
+      } else if (newProgress <= 40) {
+        // Home stretch phase (33-40 progress)
+        // After 32 boxes, continue from Box 1 onwards
+        const homeStretchMoves = newProgress - 32;
+        newPosition = homeStretchMoves; // Box 1 (position 1), Box 2 (position 2), etc.
+        
+        // Play 32-box completion sound when entering home stretch
+        if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
+          playSound('32-box-complete');
+        }
+      } else {
+        // Victory! (40+ progress)
+        newPosition = 8; // Final home position (Box 8)
+      }
+      
+      console.log(`King moving from position ${currentPosition} to ${newPosition}, progress: ${newProgress}`);
+      
+      // Check if new position conflicts with another king
+      const conflictingKing = newKingPositions.findIndex((pos, index) => 
+        index !== playerIndex && pos === newPosition
+      );
+      
+      if (conflictingKing !== -1) {
+        // King collision! ONLY the ARRIVING king gets killed and respawns at starting position
+        console.log(`King collision! ${TEAMS[playerIndex]} king killed by ${TEAMS[conflictingKing]} king`);
+        
+        // Play king kill sound when king is killed
+        playSound('king-capture');
+        
+        newKingPositions[playerIndex] = startingPosition;
+        newKingProgress[playerIndex] = 0; // Reset progress when killed
+        setKingPositions(newKingPositions);
+        setKingProgress(newKingProgress);
+      } else {
+        // Safe move - move step by step
+        moveKingStepByStepFixed(playerIndex, currentPosition, newPosition, newProgress);
+        return false; // Don't continue with normal flow
+      }
+    }
+    
+    console.log(`Updated king positions:`, newKingPositions);
+    console.log(`Updated king progress:`, newKingProgress);
+    
+    // Check for victory (40 total moves: 32 full round + 8 home stretch)
+    if (newKingProgress[playerIndex] >= 40) {
+      setGamePhase('victory');
+      playSound('victory');
+      return true; // Victory achieved
+    }
+    
+    return false; // No victory
+  };
+
+  const nextTurn = () => {
+    // Don't reset points here - they should accumulate for king movement
+    // Points will be reset when the king actually moves
+    
+    setCurrentPlayer((prev) => (prev + 1) % 4);
+    setSelectedPiece(null);
   };
 
   const handleSquareClick = (row, col) => {
     if (isCascading) return;
     
-    if (!selectedPiece) {
-      // Select piece if it belongs to current player
-      const piece = board[row][col];
-      if (piece && piece.team === currentPlayer) {
-        setSelectedPiece({ row, col, piece });
-        // Calculate valid moves for this piece
-        calculateValidMoves(piece, row, col);
-      }
-    } else {
-      // Check if the clicked square is a valid move
-      const isValidMove = validMoves.some(move => move.row === row && move.col === col);
-      
-      if (isValidMove) {
-        // Move piece
-        performMove(selectedPiece.row, selectedPiece.col, row, col);
-        setSelectedPiece(null);
-        setValidMoves([]);
-      } else {
-        // Try to select a different piece
-        const piece = board[row][col];
-        if (piece && piece.team === currentPlayer) {
-          setSelectedPiece({ row, col, piece });
-          calculateValidMoves(piece, row, col);
-        } else {
-          setSelectedPiece(null);
-          setValidMoves([]);
-        }
-      }
+    const piece = board[row][col];
+    
+    if (selectedPiece) {
+      // Attempt to move
+      handlePieceMove(selectedPiece.row, selectedPiece.col, row, col);
+    } else if (piece && piece.teamIndex === currentPlayer) {
+      // Select piece
+      setSelectedPiece({ row, col, piece });
     }
   };
 
-  const calculateValidMoves = (piece, fromRow, fromCol) => {
-    const moves = [];
-    
-    // Check all possible destinations
-    for (let toRow = 0; toRow < 8; toRow++) {
-      for (let toCol = 0; toCol < 8; toCol++) {
-        if (isValidMove(piece, fromRow, fromCol, toRow, toCol, board)) {
-          moves.push({ row: toRow, col: toCol });
-        }
-      }
-    }
-    
-    setValidMoves(moves);
-  };
-
-  const performMove = async (fromRow, fromCol, toRow, toCol) => {
-    const piece = board[fromRow][fromCol];
-    if (!piece || piece.team !== currentPlayer) return;
-    
-    const newBoard = board.map(row => [...row]);
-    const targetPiece = newBoard[toRow][toCol];
-    
-    // Handle capture
-    if (targetPiece && targetPiece.team !== currentPlayer) {
-      const points = getPieceValue(targetPiece.type);
-      
-      // Update points and king progress
-      setPlayerPoints(prev => ({
-        ...prev,
-        [currentPlayer]: prev[currentPlayer] + points
-      }));
-      
-      setKingProgress(prev => ({
-        ...prev,
-        [currentPlayer]: prev[currentPlayer] + points
-      }));
-      
-      // Update king position based on progress
-      const newProgress = kingProgress[currentPlayer] + points;
-      
-      // Calculate king position based on team's path
-      let newKingPosition;
-      if (currentPlayer === 'blue') {
-        newKingPosition = Math.min(8, newProgress + 1); // Blue: 1-8
-      } else if (currentPlayer === 'red') {
-        newKingPosition = Math.min(16, 9 + newProgress); // Red: 9-16
-      } else if (currentPlayer === 'yellow') {
-        newKingPosition = Math.min(24, 17 + newProgress); // Yellow: 17-24
-      } else if (currentPlayer === 'green') {
-        newKingPosition = Math.min(32, 25 + newProgress); // Green: 25-32
-      }
-      
-      // Update both king progress and position
-      setKingProgress(prev => ({
-        ...prev,
-        [currentPlayer]: newProgress
-      }));
-      
-      setKingPositions(prev => ({
-        ...prev,
-        [currentPlayer]: newKingPosition
-      }));
-      
-      // Check for victory (40 moves to complete the path)
-      if (newProgress >= 40) {
-        setGamePhase('finished');
-        return;
-      }
-    }
-    
-    // Move piece
-    newBoard[toRow][toCol] = piece;
-    newBoard[fromRow][fromCol] = null;
-    setBoard(newBoard);
-    
-    // Start cascading after a short delay
-    if (targetPiece && targetPiece.team !== currentPlayer) {
-      setTimeout(() => {
-        setIsCascading(true);
-        performCascade(newBoard, currentPlayer);
-      }, 300);
-    }
-    
-    // Next player's turn
-    setCurrentPlayer(getNextPlayer(currentPlayer));
-    setTurn(prev => prev + 1);
-  };
-
-  const getPieceSymbol = (type) => {
+  const getPieceSymbol = (piece) => {
     const symbols = {
       'king': '♔',
       'queen': '♕',
@@ -536,189 +1182,443 @@ function App() {
       'knight': '♘',
       'pawn': '♙'
     };
-    return symbols[type] || '?';
+    return symbols[piece.type] || '?';
   };
 
-  const getTeamColor = (team) => {
-    const colors = {
-      'blue': '#0066cc',
-      'red': '#cc0000',
-      'yellow': '#ccaa00',
-      'green': '#00aa00'
-    };
-    return colors[team] || '#000000';
-  };
-
-  const getKingPathPosition = (team, index) => {
-    // Each team has 8 positions on their path
-    // Blue: 1-8, Red: 9-16, Yellow: 17-24, Green: 25-32
-    const positions = {
-      'blue': { start: 1, end: 8 },
-      'red': { start: 9, end: 16 },
-      'yellow': { start: 17, end: 24 },
-      'green': { start: 25, end: 32 }
-    };
-    
-    const pos = positions[team];
-    if (team === 'blue') {
-      return pos.start + index; // 1, 2, 3, 4, 5, 6, 7, 8
-    } else if (team === 'red') {
-      return pos.start + index; // 9, 10, 11, 12, 13, 14, 15, 16
-    } else if (team === 'yellow') {
-      return pos.start + index; // 17, 18, 19, 20, 21, 22, 23, 24
-    } else if (team === 'green') {
-      return pos.start + index; // 25, 26, 27, 28, 29, 30, 31, 32
+  // Calculate points for captured piece (Ludo-style)
+  const getCapturePoints = (pieceType, playerIndex) => {
+    if (pieceType === 'pawn') {
+      // First pawn capture = 2 points, subsequent = 1 point
+      return pawnCaptures[playerIndex] === 0 ? 2 : 1;
+    } else {
+      // Other pieces: Queen=6, Rook=5, Bishop=4, Knight=3
+      return PIECE_VALUES[pieceType] || 0;
     }
-    return index + 1;
   };
+
+  // PIECE ROTATION LOGIC - All pieces face current player's direction
+  const getPieceRotation = (pieceTeamIndex, currentPlayerIndex) => {
+    // All pieces rotate to face the current player's direction
+    // Blue=0 (upward), Red=1 (rightward), Yellow=2 (downward), Green=3 (leftward)
+    switch (currentPlayerIndex) {
+      case 0: return 0;    // Blue's turn - pieces face upward (0°)
+      case 1: return 270;  // Red's turn - pieces face rightward (270°)
+      case 2: return 180;  // Yellow's turn - pieces face downward (180°)
+      case 3: return 90;   // Green's turn - pieces face leftward (90°)
+      default: return 0;
+    }
+  };
+
+  // KING PATH LOGIC - FIXED SEQUENTIAL LAYOUT
+  const getKingPathBox = (position) => {
+    // 32-box outer path: B1-B32 in sequential order
+    // Layout: Bottom (B1-B8) → Right (B9-B16) → Top (B17-B24) → Left (B25-B32)
+    
+    if (position < 8) {
+      // Bottom row: B1-B8 (left to right)
+      return { row: 7, col: position };
+    } else if (position < 16) {
+      // Right column: B9-B16 (bottom to top)
+      return { row: 15 - position, col: 7 };
+    } else if (position < 24) {
+      // Top row: B17-B24 (right to left)
+      return { row: 0, col: 23 - position };
+    } else {
+      // Left column: B25-B32 (top to bottom)
+      return { row: position - 24, col: 0 };
+    }
+  };
+
+  const getKingHomePosition = (teamIndex) => {
+    // Home positions: Blue=B8, Red=B16, Yellow=B24, Green=B32
+    switch (teamIndex) {
+      case 0: return 7; // Blue: B8
+      case 1: return 15; // Red: B16
+      case 2: return 23; // Yellow: B24
+      case 3: return 31; // Green: B32
+      default: return 0;
+    }
+  };
+
+  const getKingStartingPosition = (teamIndex) => {
+    // Starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25 (using 1-32 system)
+    switch (teamIndex) {
+      case 0: return 1; // Blue: B1
+      case 1: return 9; // Red: B9
+      case 2: return 17; // Yellow: B17
+      case 3: return 25; // Green: B25
+      default: return 1;
+    }
+  };
+
+  // Helper function to get color class based on path position
+  const getPathColorClass = (pathPosition) => {
+    if (pathPosition >= 0 && pathPosition <= 7) {
+      return 'path-blue'; // Box 1-8 (Blue section)
+    } else if (pathPosition >= 8 && pathPosition <= 15) {
+      return 'path-red'; // Box 9-16 (Red section)
+    } else if (pathPosition >= 16 && pathPosition <= 23) {
+      return 'path-yellow'; // Box 17-24 (Yellow section)
+    } else if (pathPosition >= 24 && pathPosition <= 31) {
+      return 'path-green'; // Box 25-32 (Green section)
+    }
+    return '';
+  };
+
+  // Game flow handlers
+  const handleSplashComplete = () => {
+    setAppPhase('mode-selection');
+  };
+
+  const handleModeSelect = (mode) => {
+    setSelectedGameMode(mode);
+    setAppPhase('game-splash');
+  };
+
+  const handleGameSplashComplete = () => {
+    setAppPhase('game');
+  };
+
+  const handleBackToMenu = () => {
+    setAppPhase('mode-selection');
+    setSelectedGameMode(null);
+    // Reset game state when going back to menu
+    setBoard([]);
+    setKingPositions([1, 9, 17, 25]); // Using 1-32 system
+    setCascadeHighlights([]);
+    setCurrentPlayer(0);
+    setSelectedPiece(null);
+    setPlayerPoints([0, 0, 0, 0]);
+    setKingProgress([0, 0, 0, 0]);
+    setPawnCaptures([0, 0, 0, 0]);
+    setGamePhase('setup');
+    setIsCascading(false);
+  };
+
+  // AI Player Logic
+  const isAIPlayer = (playerIndex) => {
+    if (!selectedGameMode) return false;
+    
+    switch (selectedGameMode.id) {
+      case '1player':
+        return playerIndex !== 0; // Blue (player 0) is human, others are AI
+      case '2player':
+        return playerIndex === 1 || playerIndex === 3; // Red (1) and Green (3) are AI, Blue (0) and Yellow (2) are human
+      case '3player':
+        return playerIndex === 1; // Red (1) is AI, Blue (0), Yellow (2), and Green (3) are human
+      case '4player':
+        return false; // All players are human
+      default:
+        return false;
+    }
+  };
+
+  const makeAIMove = () => {
+    if (!isAIPlayer(currentPlayer)) return;
+
+    // Simple AI: Find a random valid move
+    const validMoves = [];
+    
+    // Find all pieces belonging to current AI player
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        if (piece && piece.teamIndex === currentPlayer) {
+          // Find all valid moves for this piece
+          for (let toRow = 0; toRow < 8; toRow++) {
+            for (let toCol = 0; toCol < 8; toCol++) {
+              if (isValidMove(row, col, toRow, toCol, piece)) {
+                validMoves.push({ fromRow: row, fromCol: col, toRow, toCol });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (validMoves.length > 0) {
+      // Choose a random valid move
+      const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+      
+      // Add a small delay to make AI moves visible
+      setTimeout(() => {
+        handlePieceMove(randomMove.fromRow, randomMove.fromCol, randomMove.toRow, randomMove.toCol);
+      }, 1000);
+    } else {
+      // No valid moves, skip turn
+      nextTurn();
+    }
+  };
+
+  // Trigger AI move when it's AI's turn
+  useEffect(() => {
+    if (appPhase === 'game' && isAIPlayer(currentPlayer) && !isCascading) {
+      makeAIMove();
+    }
+  }, [currentPlayer, appPhase, isCascading]);
+
+  // Render based on app phase
+  if (appPhase === 'splash') {
+    return <SplashScreen onComplete={handleSplashComplete} />;
+  }
+  
+  if (appPhase === 'mode-selection') {
+    return <GameModeSelection onModeSelect={handleModeSelect} />;
+  }
+  
+  if (appPhase === 'game-splash') {
+    return (
+      <SplashScreen 
+        onComplete={handleGameSplashComplete}
+                  title={`${selectedGameMode?.title || 'CrushLudoChess'}`}
+        subtitle="Game Starting..."
+      />
+    );
+  }
 
   return (
     <div className="App">
+      <div className="floating-objects">
+        {Array(40).fill(null).map((_, index) => (
+          <div key={index} className="floating-object"></div>
+        ))}
+      </div>
       <header className="App-header">
-        <h1>🎮 CRUSHLUDOCHESS</h1>
-        <p>The Ultimate 4-Player Chess-Puzzle Hybrid</p>
-        {isCascading && <div className="cascading-indicator">🔄 Cascading...</div>}
-      </header>
-      
-      <main className="game-container">
-                 {/* King Paths */}
-         <div className="king-paths">
-           {/* Blue King Path (Left) */}
-           <div className="king-path-left">
-             {Array.from({ length: 8 }, (_, i) => {
-               const pathNumber = getKingPathPosition('blue', i);
-               const isKingPresent = kingPositions.blue === pathNumber;
-               return (
-                 <div key={i} className={`king-path-square ${isKingPresent ? 'king-present' : ''}`}>
-                   {isKingPresent && <div className="king-piece blue">♔</div>}
-                   <span className="path-number">{pathNumber}</span>
-                 </div>
-               );
-             })}
-           </div>
-           
-           {/* Yellow King Path (Top) */}
-           <div className="king-path-top">
-             {Array.from({ length: 8 }, (_, i) => {
-               const pathNumber = getKingPathPosition('yellow', i);
-               const isKingPresent = kingPositions.yellow === pathNumber;
-               return (
-                 <div key={i} className={`king-path-square ${isKingPresent ? 'king-present' : ''}`}>
-                   {isKingPresent && <div className="king-piece yellow">♔</div>}
-                   <span className="path-number">{pathNumber}</span>
-                 </div>
-               );
-             })}
-           </div>
-           
-           {/* Red King Path (Right) */}
-           <div className="king-path-right">
-             {Array.from({ length: 8 }, (_, i) => {
-               const pathNumber = getKingPathPosition('red', i);
-               const isKingPresent = kingPositions.red === pathNumber;
-               return (
-                 <div key={i} className={`king-path-square ${isKingPresent ? 'king-present' : ''}`}>
-                   {isKingPresent && <div className="king-piece red">♔</div>}
-                   <span className="path-number">{pathNumber}</span>
-                 </div>
-               );
-             })}
-           </div>
-           
-           {/* Green King Path (Bottom) */}
-           <div className="king-path-bottom">
-             {Array.from({ length: 8 }, (_, i) => {
-               const pathNumber = getKingPathPosition('green', i);
-               const isKingPresent = kingPositions.green === pathNumber;
-               return (
-                 <div key={i} className={`king-path-square ${isKingPresent ? 'king-present' : ''}`}>
-                   {isKingPresent && <div className="king-piece green">♔</div>}
-                   <span className="path-number">{pathNumber}</span>
-                 </div>
-               );
-             })}
-           </div>
-         </div>
-        
-        {/* Main Chess Board */}
-        <div className="chess-board">
-          <div className="board-grid">
+        <div className="header-content">
+          <img src="/crushludochesslogo.png" alt="CrushLudoChess Logo" className="game-logo" />
+          <h1>CrushLudoChess</h1>
+          {selectedGameMode && (
+            <div className="game-mode-indicator">
+              {selectedGameMode.title}
+            </div>
+          )}
+        </div>
+        <button className="back-to-menu-btn" onClick={handleBackToMenu}>
+          ← Back to Menu
+        </button>
+
+              </header>
+
+      {/* Sound Controls - Outside Header */}
+      <div className="sound-controls-standalone">
+        <button 
+          className={`sound-btn ${isSoundEnabled ? 'enabled' : 'disabled'}`}
+          onClick={handleSoundToggle}
+          title="Game Sounds"
+        >
+          {isSoundEnabled ? '🔊' : '🔇'}
+        </button>
+        <button 
+          className={`sound-btn ${isBackgroundMusicEnabled ? 'enabled' : 'disabled'}`}
+          onClick={handleMusicToggle}
+          title="Background Music"
+        >
+          {isBackgroundMusicEnabled ? '🎵' : '🔇'}
+        </button>
+      </div>
+
+      {/* Player Panels - Absolutely Positioned */}
+      <div className={`player-panel yellow-panel ${currentPlayer === 2 ? 'current-turn' : ''}`}>
+        <div className="player-header">
+          <div className="player-color" style={{backgroundColor: TEAM_COLORS[2]}}></div>
+          <input 
+            type="text" 
+            value={playerNames[2]} 
+            onChange={(e) => {
+              const newNames = [...playerNames];
+              newNames[2] = e.target.value;
+              setPlayerNames(newNames);
+            }}
+            className="player-name-input"
+            placeholder="Yellow Player Name"
+          />
+          {isAIPlayer(2) && <span className="ai-indicator">🤖 AI</span>}
+          <span className="stat">Score: {playerPoints[2]}</span>
+        </div>
+      </div>
+      <div className={`player-panel green-panel ${currentPlayer === 3 ? 'current-turn' : ''}`}>
+        <div className="player-header">
+          <div className="player-color" style={{backgroundColor: TEAM_COLORS[3]}}></div>
+          <input 
+            type="text" 
+            value={playerNames[3]} 
+            onChange={(e) => {
+              const newNames = [...playerNames];
+              newNames[3] = e.target.value;
+              setPlayerNames(newNames);
+            }}
+            className="player-name-input"
+            placeholder="Green Player Name"
+          />
+          {isAIPlayer(3) && <span className="ai-indicator">🤖 AI</span>}
+          <span className="stat">Score: {playerPoints[3]}</span>
+        </div>
+      </div>
+      <div className={`player-panel red-panel ${currentPlayer === 1 ? 'current-turn' : ''}`}>
+        <div className="player-header">
+          <div className="player-color" style={{backgroundColor: TEAM_COLORS[1]}}></div>
+          <input 
+            type="text" 
+            value={playerNames[1]} 
+            onChange={(e) => {
+              const newNames = [...playerNames];
+              newNames[1] = e.target.value;
+              setPlayerNames(newNames);
+            }}
+            className="player-name-input"
+            placeholder="Red Player Name"
+          />
+          {isAIPlayer(1) && <span className="ai-indicator">🤖 AI</span>}
+          <span className="stat">Score: {playerPoints[1]}</span>
+        </div>
+      </div>
+      <div className={`player-panel blue-panel ${currentPlayer === 0 ? 'current-turn' : ''}`}>
+        <div className="player-header">
+          <div className="player-color" style={{backgroundColor: TEAM_COLORS[0]}}></div>
+          <input 
+            type="text" 
+            value={playerNames[0]} 
+            onChange={(e) => {
+              const newNames = [...playerNames];
+              newNames[0] = e.target.value;
+              setPlayerNames(newNames);
+            }}
+            className="player-name-input"
+            placeholder="Blue Player Name"
+          />
+          {isAIPlayer(0) && <span className="ai-indicator">🤖 AI</span>}
+          <span className="stat">Score: {playerPoints[0]}</span>
+        </div>
+      </div>
+
+      {/* Main Board Section - Now Column Flex */}
+      <div className="main-board-section">
+        {/* Top King Path (B17-B24) - Yellow Player */}
+        <div className="king-path-top">
+          {Array(8).fill(null).map((_, index) => {
+            const pathPosition = 23 - index; // B17-B24 (right to left)
+            const blueKingHere = kingPositions[0] === pathPosition;
+            const redKingHere = kingPositions[1] === pathPosition;
+            const yellowKingHere = kingPositions[2] === pathPosition;
+            const greenKingHere = kingPositions[3] === pathPosition;
+            return (
+              <div key={`top-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                <span className="path-number">{pathPosition + 1}</span>
+                {pathPosition === 23 && <div className="throne-label">👑</div>}
+              </div>
+            );
+          })}
+        </div>
+        {/* Middle Row: Left Path, Board, Right Path */}
+        <div className="board-middle-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Left King Path (B25-B32) */}
+          <div className="king-path-left">
+            {Array(8).fill(null).map((_, index) => {
+              const pathPosition = 24 + index; // B25-B32 (sequential)
+              const blueKingHere = kingPositions[0] === pathPosition;
+              const redKingHere = kingPositions[1] === pathPosition;
+              const yellowKingHere = kingPositions[2] === pathPosition;
+              const greenKingHere = kingPositions[3] === pathPosition;
+              return (
+                <div key={`left-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                  {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                  {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                  {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                  {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                  <span className="path-number">{pathPosition + 1}</span>
+                  {pathPosition === 31 && <div className="throne-label">👑</div>}
+                </div>
+              );
+            })}
+          </div>
+          {/* Main 8x8 Chess Board */}
+          <div className="chess-board">
             {board.map((row, rowIndex) => (
               <div key={rowIndex} className="board-row">
-                {row.map((piece, colIndex) => {
-                  const isLightSquare = (rowIndex + colIndex) % 2 === 0;
-                  const isHighlighted = cascadeHighlights.some(h => h.row === rowIndex && h.col === colIndex);
-                  const isSelected = selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex;
-                  const isValidMove = validMoves.some(move => move.row === rowIndex && move.col === colIndex);
-                  
-                  return (
-                    <div
-                      key={`${rowIndex}-${colIndex}`}
-                      className={`board-square ${isLightSquare ? 'light' : 'dark'} ${isHighlighted ? 'cascade-highlight' : ''} ${isSelected ? 'selected' : ''} ${isValidMove ? 'valid-move' : ''}`}
-                      onClick={() => handleSquareClick(rowIndex, colIndex)}
-                    >
-                      {piece && (
-                        <div 
-                          className="chess-piece"
-                          style={{ 
-                            color: getTeamColor(piece.team),
-                            borderColor: piece.team === currentPlayer ? '#ffff00' : 'transparent'
-                          }}
-                        >
-                          {getPieceSymbol(piece.type)}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {row.map((piece, colIndex) => (
+                  <div
+                    key={`${rowIndex}-${colIndex}`}
+                    className={`board-square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'} ${
+                      selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex ? 'selected' : ''
+                    } ${
+                      cascadeHighlights.some(h => h.row === rowIndex && h.col === colIndex) ? 'cascade-highlight' : ''
+                    }`}
+                    onClick={() => handleSquareClick(rowIndex, colIndex)}
+                  >
+                    {piece && (
+                      <div 
+                        className="piece"
+                        style={{ 
+                          color: TEAM_COLORS[piece.teamIndex],
+                          transform: `rotate(${getPieceRotation(piece.teamIndex, currentPlayer)}deg)`
+                        }}
+                      >
+                        {getPieceSymbol(piece)}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
-        </div>
-        
-        {/* Player Stats */}
-        <div className="player-stats">
-          {Object.entries(playerPoints).map(([team, points]) => (
-            <div key={team} className={`player-stat ${team} ${team === currentPlayer ? 'current' : ''}`}>
-              <div className="player-header">
-                <div className="player-color" style={{ backgroundColor: getTeamColor(team) }}></div>
-                <span className="player-name">{team.toUpperCase()}</span>
-              </div>
-              <div className="player-info">
-                <div className="points">Points: {points}</div>
-                <div className="king-progress">King: {kingPositions[team]}/32</div>
-                <div className="progress-bar">
-                  <div 
-                    className="progress-fill" 
-                    style={{ 
-                      width: `${(kingProgress[team] / 40) * 100}%`,
-                      backgroundColor: getTeamColor(team)
-                    }}
-                  ></div>
+          {/* Right King Path (B9-B16) */}
+          <div className="king-path-right">
+            {Array(8).fill(null).map((_, index) => {
+              const pathPosition = 15 - index; // B9-B16 (bottom to top)
+              const blueKingHere = kingPositions[0] === pathPosition;
+              const redKingHere = kingPositions[1] === pathPosition;
+              const yellowKingHere = kingPositions[2] === pathPosition;
+              const greenKingHere = kingPositions[3] === pathPosition;
+              return (
+                <div key={`right-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                  {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                  {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                  {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                  {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                  <span className="path-number">{pathPosition + 1}</span>
+                  {pathPosition === 15 && <div className="throne-label">👑</div>}
                 </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
-      </main>
-      
-      {/* Game Info */}
-      <div className="game-info">
-        <div className="turn-info">
-          <span>Turn: {turn}</span>
-          <span>Current Player: <span style={{ color: getTeamColor(currentPlayer) }}>{currentPlayer.toUpperCase()}</span></span>
+        {/* Bottom King Path (B1-B8) - Blue Player */}
+        <div className="king-path-bottom">
+          {Array(8).fill(null).map((_, index) => {
+            const pathPosition = index; // B1-B8 (left to right)
+            const blueKingHere = kingPositions[0] === pathPosition;
+            const redKingHere = kingPositions[1] === pathPosition;
+            const yellowKingHere = kingPositions[2] === pathPosition;
+            const greenKingHere = kingPositions[3] === pathPosition;
+            return (
+              <div key={`bottom-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                <span className="path-number">{pathPosition + 1}</span>
+                {pathPosition === 7 && <div className="throne-label">👑</div>}
+              </div>
+            );
+          })}
         </div>
       </div>
-      
-      {gamePhase === 'finished' && (
+
+      {gamePhase === 'victory' && (
         <div className="victory-modal">
-          <h2>🎉 Victory!</h2>
-          <p>Team {currentPlayer} has won!</p>
-          <button onClick={initializeBoard}>Play Again</button>
+          <div className="victory-content">
+            <h2>🎉 VICTORY! 🎉</h2>
+            <p>Player {TEAMS[currentPlayer].toUpperCase()} wins!</p>
+            <button onClick={initializeBoard}>Play Again</button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-export default App; 
+export default App;
