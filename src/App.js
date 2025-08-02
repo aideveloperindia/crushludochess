@@ -1545,30 +1545,7 @@ function App() {
         <button className="back-to-menu-btn" onClick={handleBackToMenu}>
           ← Back to Menu
         </button>
-        <button 
-          className="test-victory-btn" 
-          onClick={() => {
-            console.log('Testing victory...');
-            setWinningPlayer(0);
-            setGamePhase('victory');
-            playSound('victory');
-          }}
-          style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            background: '#ff6b6b',
-            color: 'white',
-            border: 'none',
-            padding: '5px 10px',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            zIndex: 10000
-          }}
-        >
-          Test Victory
-        </button>
+
 
               </header>
 

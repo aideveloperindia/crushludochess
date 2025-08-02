@@ -889,7 +889,7 @@
 
 .player-info-red .player-name-input,
 .player-info-red div {
-  transform: rotate(-90deg); /* Rotate text to face right player */
+  transform: rotate(0deg); /* Normal orientation */
 }
 
 .player-info-red.current-turn {
@@ -901,7 +901,7 @@
 
 .player-info-red.current-turn .player-name-input,
 .player-info-red.current-turn div {
-  transform: rotate(-90deg) scale(1.05);
+  transform: rotate(0deg) scale(1.05);
 }
 
 /* Yellow Player Info (Top) - Faces Yellow Player */
@@ -916,7 +916,7 @@
 
 .player-info-yellow .player-name-input,
 .player-info-yellow div {
-  transform: rotate(180deg); /* Rotate text to face top player */
+  transform: rotate(0deg); /* Normal orientation */
 }
 
 .player-info-yellow.current-turn {
@@ -928,7 +928,7 @@
 
 .player-info-yellow.current-turn .player-name-input,
 .player-info-yellow.current-turn div {
-  transform: rotate(180deg) scale(1.05);
+  transform: rotate(0deg) scale(1.05);
 }
 
 /* Green Player Info (Left) - Faces Green Player */
@@ -943,7 +943,7 @@
 
 .player-info-green .player-name-input,
 .player-info-green div {
-  transform: rotate(90deg); /* Rotate text to face left player */
+  transform: rotate(0deg); /* Normal orientation */
 }
 
 .player-info-green.current-turn {
@@ -955,7 +955,7 @@
 
 .player-info-green.current-turn .player-name-input,
 .player-info-green.current-turn div {
-  transform: rotate(90deg) scale(1.05);
+  transform: rotate(0deg) scale(1.05);
 }
 
 /* Player Name Input Styling */
