@@ -129,6 +129,7 @@
   width: 120px;
   height: 120px;
   object-fit: contain;
+  border-radius: 50%;
   filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
   animation: logoGlow 2s ease-in-out infinite alternate;
 }
@@ -211,6 +212,7 @@
   .logo-image {
     width: 80px;
     height: 80px;
+    border-radius: 50%;
   }
   
   .splash-title {
@@ -252,6 +254,7 @@
   .logo-image {
     width: 60px;
     height: 60px;
+    border-radius: 50%;
   }
   
   .splash-title {

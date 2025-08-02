@@ -176,6 +176,8 @@
 
 .logo-container {
   margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
 }
 
 .mode-logo {
@@ -183,16 +185,10 @@
   height: 80px;
   object-fit: contain;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-  animation: logoFloat 3s ease-in-out infinite;
-}
-
-@keyframes logoFloat {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 5px;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
 }
 
 .mode-title {
@@ -207,22 +203,22 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  font-family: 'Arial Black', 'Helvetica Bold', sans-serif;
 }
 
-.mode-subtitle {
+.mode-title::first-letter {
+  font-size: 1.2em;
+  color: #ff6b6b;
+  text-shadow: 0 0 10px rgba(255, 107, 107, 0.8);
+}
+
+.mode-tagline {
   font-size: 1rem;
   color: rgba(255, 255, 255, 0.8);
-  margin: 0 0 10px 0;
+  margin: 0 0 15px 0;
   font-style: italic;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.mode-description {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 15px 0;
-  font-weight: 300;
-  letter-spacing: 0.5px;
+  font-weight: 400;
 }
 
 .mode-grid {
@@ -249,9 +245,11 @@
     0 0 0 1px rgba(255, 255, 255, 0.2),
     inset 0 2px 0 rgba(255, 255, 255, 0.3);
   border: 3px solid rgba(255, 255, 255, 0.3);
-  min-height: 160px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
   backdrop-filter: blur(15px);
   transform-style: preserve-3d;
   perspective: 1000px;
@@ -303,60 +301,30 @@
 }
 
 .mode-icon {
-  font-size: 2.2rem;
-  margin-bottom: 12px;
+  font-size: 2.5rem;
+  margin-bottom: 8px;
   display: block;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .mode-card-title {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: #ffffff;
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-align: center;
 }
 
 .mode-card-description {
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.8);
-  margin: 0 0 10px 0;
-  line-height: 1.3;
+  margin: 0;
+  line-height: 1.2;
+  text-align: center;
 }
 
-.player-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-}
 
-.player-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.player-item:hover {
-  background: rgba(0, 0, 0, 0.3);
-  transform: translateX(3px);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.player-avatar {
-  font-size: 0.9rem;
-}
-
-.player-name {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-}
 
 .mode-card-overlay {
   position: absolute;
@@ -390,6 +358,47 @@
   margin-top: 20px;
 }
 
+.audio-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  margin-top: 15px;
+}
+
+  .audio-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+.audio-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.1);
+}
+
+.audio-button.enabled {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.audio-button.disabled {
+  background: rgba(244, 67, 54, 0.3);
+  border-color: rgba(244, 67, 54, 0.5);
+  opacity: 0.7;
+}
+
 .footer-text {
   font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.8);
@@ -401,36 +410,33 @@
 /* Mobile responsive */
 @media (max-width: 768px) {
   .mode-logo {
-    width: 80px;
-    height: 80px;
+    width: 60px;
+    height: 60px;
   }
   
   .mode-title {
-    font-size: 1.6rem;
-    letter-spacing: 2px;
+    font-size: 1.4rem;
+    letter-spacing: 1px;
   }
   
-  .mode-subtitle {
-    font-size: 0.9rem;
-  }
-  
-  .mode-description {
+  .mode-tagline {
     font-size: 0.8rem;
   }
   
   .mode-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 8px;
     max-width: 100%;
   }
   
   .mode-card {
     padding: 12px;
-    min-height: 120px;
+    min-height: 80px;
   }
   
   .mode-icon {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
+    margin-bottom: 4px;
   }
   
   .mode-card-title {
@@ -438,7 +444,7 @@
   }
   
   .mode-card-description {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
   }
   
   .mode-selection-content {
@@ -447,23 +453,23 @@
   }
 
   .floating-object:nth-child(1) {
-    width: 40px;
-    height: 40px;
-  }
-
-  .floating-object:nth-child(2) {
-    width: 30px;
-    height: 30px;
-  }
-
-  .floating-object:nth-child(3) {
     width: 35px;
     height: 35px;
   }
 
-  .floating-object:nth-child(4) {
+  .floating-object:nth-child(2) {
     width: 25px;
     height: 25px;
+  }
+
+  .floating-object:nth-child(3) {
+    width: 30px;
+    height: 30px;
+  }
+
+  .floating-object:nth-child(4) {
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -478,8 +484,8 @@
     letter-spacing: 1px;
   }
   
-  .mode-description {
-    font-size: 0.7rem;
+  .mode-tagline {
+    font-size: 0.8rem;
   }
   
   .mode-grid {
@@ -488,28 +494,27 @@
   }
   
   .mode-card {
-    padding: 10px;
-    min-height: 110px;
+    padding: 12px;
+    min-height: 90px;
   }
   
   .mode-icon {
-    font-size: 1.6rem;
+    font-size: 1.8rem;
+    margin-bottom: 4px;
   }
   
   .mode-card-title {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
   }
   
   .mode-card-description {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
   }
-  
-  .player-item {
-    padding: 2px 4px;
-  }
-  
-  .player-name {
-    font-size: 0.6rem;
+
+  .audio-button {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
   }
 
   .floating-object:nth-child(1) {

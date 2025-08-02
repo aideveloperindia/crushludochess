@@ -24,17 +24,18 @@ function App() {
   
   // Game states
   const [board, setBoard] = useState([]);
-  const [kingPositions, setKingPositions] = useState([0, 8, 16, 24]); // B1, B9, B17, B25
+  const [kingPositions, setKingPositions] = useState([0, 8, 16, 24]); // B1, B9, B17, B25 (FIRST boxes) - using 0-based indexing
   const [cascadeHighlights, setCascadeHighlights] = useState([]); // For showing cascade boxes
   const [currentPlayer, setCurrentPlayer] = useState(0);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [playerPoints, setPlayerPoints] = useState([0, 0, 0, 0]);
-  const [kingProgress, setKingProgress] = useState([0, 0, 0, 0]);
+  const [kingProgress, setKingProgress] = useState([1, 1, 1, 1]);
   const [pawnCaptures, setPawnCaptures] = useState([0, 0, 0, 0]); // Track pawn captures per player
   const [gamePhase, setGamePhase] = useState('setup');
+  const [winningPlayer, setWinningPlayer] = useState(null); // Track the actual winner
 
   const [isCascading, setIsCascading] = useState(false);
-  const [playerNames, setPlayerNames] = useState(['Player 1', 'Player 2', 'Player 3', 'Player 4']);
+  const [playerNames, setPlayerNames] = useState(['Player Blue', 'Player Red', 'Player Yellow', 'Player Green']);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isBackgroundMusicEnabled, setIsBackgroundMusicEnabled] = useState(true);
 
@@ -77,20 +78,19 @@ function App() {
       // Add event listeners for better debugging
       audio.addEventListener('canplaythrough', () => {
         console.log(`Audio loaded successfully: ${soundType}`);
+        // Try to play when loaded
+        audio.play().catch((error) => {
+          console.log(`Audio playback failed for ${soundType}:`, error);
+        });
       });
       
       audio.addEventListener('error', (e) => {
         console.log(`Audio error for ${soundType}:`, e);
       });
       
-      audio.play().then(() => {
-        console.log(`Sound played successfully: ${soundType}`);
-      }).catch((error) => {
-        console.log('Audio playback failed:', error);
-        // Try to play without user interaction (for background music)
-        if (soundType === 'background') {
-          console.log('Attempting to play background music...');
-        }
+      // Try to play immediately
+      audio.play().catch((error) => {
+        console.log(`Audio playback failed for ${soundType}:`, error);
       });
     } catch (error) {
       console.log('Audio not supported:', error);
@@ -104,35 +104,51 @@ function App() {
     setIsSoundEnabled(!isSoundEnabled);
   };
 
-  // Background music with proper mute control
+  // Global audio instance - only one music instance for the entire game
   const [backgroundAudio, setBackgroundAudio] = useState(null);
   
   const playBackgroundMusic = useCallback(() => {
-    if (!isBackgroundMusicEnabled) return;
+    // If music is disabled, don't play
+    if (!isBackgroundMusicEnabled) {
+      if (backgroundAudio) {
+        backgroundAudio.pause();
+        backgroundAudio.currentTime = 0;
+      }
+      return;
+    }
     
+    // If we already have a music instance, just resume it
+    if (backgroundAudio) {
+      backgroundAudio.play().catch((error) => {
+        console.log('Failed to resume existing music:', error);
+      });
+      return;
+    }
+    
+    // Create new music instance only if we don't have one
     try {
       const audio = new Audio('/audio/background music.mp3');
       audio.loop = true;
       audio.volume = 0.3;
       audio.preload = 'auto';
       
-      // Add event listeners for better debugging
       audio.addEventListener('canplaythrough', () => {
         console.log('Background music loaded successfully');
-        // Try to play when loaded
-        audio.play().then(() => {
-          setBackgroundAudio(audio);
-          console.log('Background music started successfully');
-        }).catch((error) => {
-          console.log('Background music playback failed:', error);
-        });
+        if (isBackgroundMusicEnabled) {
+          audio.play().then(() => {
+            setBackgroundAudio(audio);
+            console.log('Background music started successfully');
+          }).catch((error) => {
+            console.log('Background music playback failed:', error);
+          });
+        }
       });
       
       audio.addEventListener('error', (e) => {
         console.log('Background music error:', e);
       });
       
-      // Also try to play immediately
+      // Try to play immediately
       audio.play().then(() => {
         setBackgroundAudio(audio);
         console.log('Background music started successfully');
@@ -142,24 +158,22 @@ function App() {
     } catch (error) {
       console.log('Background music not supported:', error);
     }
-  }, [isBackgroundMusicEnabled]);
+  }, [isBackgroundMusicEnabled, backgroundAudio]);
 
-  // Consolidated background music control
+  // Consolidated background music control - only one instance
   useEffect(() => {
     if (appPhase === 'game') {
-      if (isBackgroundMusicEnabled && !backgroundAudio) {
-        // Start music when game begins and music is enabled
+      if (isBackgroundMusicEnabled) {
+        // Start/resume music when game begins and music is enabled
         playBackgroundMusic();
-      } else if (!isBackgroundMusicEnabled && backgroundAudio) {
-        // Pause music when muted (don't destroy the instance)
+      } else if (backgroundAudio) {
+        // Pause music when muted (keep the instance)
         backgroundAudio.pause();
       }
     } else {
-      // Stop music when not in game
+      // Pause music when not in game (don't destroy instance)
       if (backgroundAudio) {
         backgroundAudio.pause();
-        backgroundAudio.currentTime = 0;
-        setBackgroundAudio(null);
       }
     }
   }, [isBackgroundMusicEnabled, appPhase, backgroundAudio, playBackgroundMusic]);
@@ -177,8 +191,8 @@ function App() {
       // Muting - pause the current audio (don't destroy it)
       backgroundAudio.pause();
       console.log('Music muted');
-    } else if (newMusicState && backgroundAudio) {
-      // Unmuting - resume the existing audio
+    } else if (newMusicState && backgroundAudio && appPhase === 'game') {
+      // Unmuting - resume the existing audio only if in game
       backgroundAudio.play().catch((error) => {
         console.log('Failed to resume music:', error);
       });
@@ -193,7 +207,28 @@ function App() {
   // Initialize the game board when game starts
   useEffect(() => {
     if (appPhase === 'game') {
-      initializeBoard();
+      // Add user interaction handler to enable audio
+      const enableAudioOnInteraction = () => {
+        // Create a silent audio context to unlock audio
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
+        
+        // Try to play a silent sound to unlock audio
+        const silentAudio = new Audio();
+        silentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+        silentAudio.play().catch(() => {});
+        
+        // Remove the event listeners
+        document.removeEventListener('click', enableAudioOnInteraction);
+        document.removeEventListener('keydown', enableAudioOnInteraction);
+        document.removeEventListener('touchstart', enableAudioOnInteraction);
+      };
+      
+      document.addEventListener('click', enableAudioOnInteraction);
+      document.addEventListener('keydown', enableAudioOnInteraction);
+      document.addEventListener('touchstart', enableAudioOnInteraction);
     }
   }, [appPhase]);
 
@@ -202,38 +237,89 @@ function App() {
   const initializeBoard = () => {
     const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
     
-    // Define queen starting positions for each team
-    const queenPositions = [
-      { row: 6, col: 3, teamIndex: 0 }, // Blue queen
-      { row: 3, col: 6, teamIndex: 1 }, // Red queen  
-      { row: 1, col: 3, teamIndex: 2 }, // Yellow queen
-      { row: 3, col: 1, teamIndex: 3 }  // Green queen
+    // ULTRA HARDCODE: Define queen positions and their surrounding pieces
+    const queenConfigs = [
+      {
+        queen: { row: 6, col: 3, teamIndex: 0 }, // Blue queen
+        surrounding: [
+          { row: 6, col: 2, type: 'pawn', teamIndex: 0 },     // Left
+          { row: 6, col: 4, type: 'pawn', teamIndex: 0 },     // Right
+          { row: 5, col: 3, type: 'knight', teamIndex: 0 },   // Above
+          { row: 7, col: 3, type: 'knight', teamIndex: 0 },   // Below
+          { row: 5, col: 2, type: 'bishop', teamIndex: 0 },   // Top-left
+          { row: 5, col: 4, type: 'bishop', teamIndex: 0 },   // Top-right
+          { row: 7, col: 2, type: 'pawn', teamIndex: 0 },     // Bottom-left
+          { row: 7, col: 4, type: 'pawn', teamIndex: 0 }      // Bottom-right
+        ]
+      },
+      {
+        queen: { row: 3, col: 6, teamIndex: 1 }, // Red queen
+        surrounding: [
+          { row: 3, col: 5, type: 'pawn', teamIndex: 1 },     // Left
+          { row: 3, col: 7, type: 'pawn', teamIndex: 1 },     // Right
+          { row: 2, col: 6, type: 'knight', teamIndex: 1 },   // Above
+          { row: 4, col: 6, type: 'knight', teamIndex: 1 },   // Below
+          { row: 2, col: 5, type: 'bishop', teamIndex: 1 },   // Top-left
+          { row: 2, col: 7, type: 'bishop', teamIndex: 1 },   // Top-right
+          { row: 4, col: 5, type: 'pawn', teamIndex: 1 },     // Bottom-left
+          { row: 4, col: 7, type: 'pawn', teamIndex: 1 }      // Bottom-right
+        ]
+      },
+      {
+        queen: { row: 2, col: 3, teamIndex: 2 }, // Yellow queen
+        surrounding: [
+          { row: 2, col: 2, type: 'pawn', teamIndex: 2 },     // Left
+          { row: 2, col: 4, type: 'pawn', teamIndex: 2 },     // Right
+          { row: 1, col: 3, type: 'knight', teamIndex: 2 },   // Above
+          { row: 3, col: 3, type: 'knight', teamIndex: 2 },   // Below
+          { row: 1, col: 2, type: 'bishop', teamIndex: 2 },   // Top-left
+          { row: 1, col: 4, type: 'bishop', teamIndex: 2 },   // Top-right
+          { row: 3, col: 2, type: 'pawn', teamIndex: 2 },     // Bottom-left
+          { row: 3, col: 4, type: 'pawn', teamIndex: 2 }      // Bottom-right
+        ]
+      },
+      {
+        queen: { row: 3, col: 1, teamIndex: 3 }, // Green queen
+        surrounding: [
+          { row: 3, col: 0, type: 'pawn', teamIndex: 3 },     // Left
+          { row: 3, col: 2, type: 'pawn', teamIndex: 3 },     // Right
+          { row: 2, col: 1, type: 'knight', teamIndex: 3 },   // Above
+          { row: 4, col: 1, type: 'knight', teamIndex: 3 },   // Below
+          { row: 2, col: 0, type: 'bishop', teamIndex: 3 },   // Top-left
+          { row: 2, col: 2, type: 'bishop', teamIndex: 3 },   // Top-right
+          { row: 4, col: 0, type: 'pawn', teamIndex: 3 },     // Bottom-left
+          { row: 4, col: 2, type: 'pawn', teamIndex: 3 }      // Bottom-right
+        ]
+      }
     ];
     
-    // Place queens and their surrounding pawns
-    queenPositions.forEach(({ row, col, teamIndex }) => {
+    // ULTRA HARDCODE: Place queens and their surrounding pieces FIRST
+    queenConfigs.forEach(({ queen, surrounding }) => {
+      console.log(`Placing ${TEAMS[queen.teamIndex]} queen at [${queen.row}, ${queen.col}]`);
+      
       // Place queen
-      newBoard[row][col] = { type: 'queen', team: TEAMS[teamIndex], teamIndex };
+      newBoard[queen.row][queen.col] = { 
+        type: 'queen', 
+        team: TEAMS[queen.teamIndex], 
+        teamIndex: queen.teamIndex 
+      };
       
-      // Place 4 pawns around the queen (left, right, above, below)
-      const pawnPositions = [
-        { row: row, col: col - 1 },     // Left
-        { row: row, col: col + 1 },     // Right
-        { row: row - 1, col: col },     // Above
-        { row: row + 1, col: col }      // Below
-      ];
-      
-      pawnPositions.forEach(({ row: pawnRow, col: pawnCol }) => {
-        if (pawnRow >= 0 && pawnRow < 8 && pawnCol >= 0 && pawnCol < 8) {
-          newBoard[pawnRow][pawnCol] = { type: 'pawn', team: TEAMS[teamIndex], teamIndex };
+      // Place surrounding pieces
+      surrounding.forEach(({ row, col, type, teamIndex }) => {
+        if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+          console.log(`Placing ${TEAMS[teamIndex]} ${type} at [${row}, ${col}]`);
+          newBoard[row][col] = { 
+            type, 
+            team: TEAMS[teamIndex], 
+            teamIndex 
+          };
         }
       });
     });
     
-    // Create remaining pieces for each team (excluding queens and their pawns)
-    const remainingPieces = [];
+    // Fill remaining squares with random pieces
+    const allPieces = [];
     TEAMS.forEach((team, teamIndex) => {
-      // Each team gets: 2 Rooks, 2 Bishops, 2 Knights, 5 Pawns (queen + 4 pawns already placed)
       const teamPieces = [
         { type: 'rook', team, teamIndex },
         { type: 'rook', team, teamIndex },
@@ -244,32 +330,68 @@ function App() {
         { type: 'pawn', team, teamIndex },
         { type: 'pawn', team, teamIndex },
         { type: 'pawn', team, teamIndex },
-        { type: 'pawn', team, teamIndex },
         { type: 'pawn', team, teamIndex }
       ];
-      remainingPieces.push(...teamPieces);
+      allPieces.push(...teamPieces);
     });
 
-    // Fill remaining empty squares with shuffled pieces
-    const shuffledPieces = remainingPieces.sort(() => Math.random() - 0.5);
+    const shuffledPieces = allPieces.sort(() => Math.random() - 0.5);
     let pieceIndex = 0;
     
+    // Fill remaining empty squares
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
-        if (!newBoard[row][col] && pieceIndex < shuffledPieces.length) {
-          newBoard[row][col] = shuffledPieces[pieceIndex];
-          pieceIndex++;
+        if (!newBoard[row][col]) {
+          if (pieceIndex < shuffledPieces.length) {
+            newBoard[row][col] = shuffledPieces[pieceIndex];
+            pieceIndex++;
+          } else {
+            const randomTeamIndex = Math.floor(Math.random() * 4);
+            newBoard[row][col] = { type: 'pawn', team: TEAMS[randomTeamIndex], teamIndex: randomTeamIndex };
+          }
         }
       }
     }
 
+    // Verify orange queen surroundings
+    console.log('=== VERIFYING ORANGE QUEEN SURROUNDINGS ===');
+    const orangeQueenRow = 2;
+    const orangeQueenCol = 3;
+    console.log(`Orange queen at [${orangeQueenRow}, ${orangeQueenCol}]`);
+    
+    // Check all 8 surrounding positions
+    const surroundingPositions = [
+      { row: orangeQueenRow, col: orangeQueenCol - 1 },     // Left
+      { row: orangeQueenRow, col: orangeQueenCol + 1 },     // Right
+      { row: orangeQueenRow - 1, col: orangeQueenCol },     // Above
+      { row: orangeQueenRow + 1, col: orangeQueenCol },     // Below
+      { row: orangeQueenRow - 1, col: orangeQueenCol - 1 }, // Top-left
+      { row: orangeQueenRow - 1, col: orangeQueenCol + 1 }, // Top-right
+      { row: orangeQueenRow + 1, col: orangeQueenCol - 1 }, // Bottom-left
+      { row: orangeQueenRow + 1, col: orangeQueenCol + 1 }  // Bottom-right
+    ];
+    
+    surroundingPositions.forEach((pos, index) => {
+      const piece = newBoard[pos.row][pos.col];
+      if (piece) {
+        console.log(`Position [${pos.row}, ${pos.col}]: ${piece.team} ${piece.type} (teamIndex: ${piece.teamIndex})`);
+        if (piece.teamIndex !== 2) {
+          console.error(`ERROR: Non-orange piece at [${pos.row}, ${pos.col}]!`);
+        }
+      } else {
+        console.error(`ERROR: No piece at [${pos.row}, ${pos.col}]!`);
+      }
+    });
+    console.log('=== END VERIFICATION ===');
+
     setBoard(newBoard);
     // Set kings at their starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25
-    setKingPositions([1, 9, 17, 25]); // B1, B9, B17, B25 (using 1-32 system)
-    setKingProgress([0, 0, 0, 0]); // Initialize progress to 0 (not position)
+    setKingPositions([0, 8, 16, 24]); // B1, B9, B17, B25 (using 0-based indexing for first boxes)
+    setKingProgress([1, 1, 1, 1]); // Initialize progress to 1 (kings start at position 0 with progress 1)
     setPlayerPoints([0, 0, 0, 0]);
     setPawnCaptures([0, 0, 0, 0]);
     setCurrentPlayer(0); // Always start with Blue player (index 0)
+    setWinningPlayer(null); // Reset winning player
     setGamePhase('playing');
   };
 
@@ -726,10 +848,6 @@ function App() {
         return; // Game ends
       }
       
-      // Reset points for this player after king has moved
-      newPoints[currentPlayer] = 0;
-      setPlayerPoints(newPoints);
-      
       // Update board first, then trigger cascading
       setBoard(newBoard);
       
@@ -962,83 +1080,65 @@ function App() {
   const moveKingStepByStepFixed = (playerIndex, startPosition, endPosition, finalProgress) => {
     console.log(`Starting step-by-step movement: ${TEAMS[playerIndex]} king from ${startPosition} to ${endPosition}, final progress: ${finalProgress}`);
     
-    // Calculate the actual path the king should take
-    const path = [];
-    let currentPos = startPosition;
-    let currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
+    // Calculate total steps needed
+    const totalSteps = finalProgress - kingProgress[playerIndex];
     
-    // Build the path step by step
-    while (currentPos !== endPosition && currentProgress < finalProgress) {
-      let nextPos;
-      
-      if (currentProgress < 32) {
-        // Still in full round - move forward on 32-box path
-        nextPos = currentPos + 1;
-        if (nextPos > 32) nextPos = 1; // Wrap around from 32 to 1
-      } else if (currentProgress === 32) {
-        // Transition from 32-box path to home stretch (Box 1)
-        nextPos = 1; // Box 1 (position 1)
-        // Play 32-box completion sound
-        playSound('32-box-complete');
-      } else {
-        // In home stretch - move towards home position
-        const homeStretchMoves = currentProgress - 32;
-        nextPos = homeStretchMoves + 1; // Box 1 (position 1), Box 2 (position 2), etc.
-      }
-      
-      // Ensure we don't add duplicate positions
-      if (path.length === 0 || path[path.length - 1] !== nextPos) {
-        path.push(nextPos);
-      }
-      
-      currentPos = nextPos;
-      currentProgress = calculateProgressFromPosition(playerIndex, currentPos);
-      
-      // Safety check to prevent infinite loop
-      if (path.length > 50) {
-        console.log('Path too long, breaking loop');
-        break;
-      }
-    }
-    
-    // If no path was built, just move directly to end position
-    if (path.length === 0) {
-      path.push(endPosition);
-    }
-    
-    console.log(`Path calculated: ${path.join(' -> ')}`);
+    console.log(`Total steps needed: ${totalSteps}`);
     
     let currentStep = 0;
+    let currentPos = startPosition;
+    let currentProgressValue = kingProgress[playerIndex];
     
     const moveOneStep = () => {
-      if (currentStep < path.length) {
-        // Move to next position in path
+      if (currentStep < totalSteps) {
+        // Calculate next position based on current progress
+        let nextPos;
+        let nextProgress = currentProgressValue + 1;
+        
+        if (nextProgress <= 32) {
+          // Still in full round - move forward on 32-box path
+          const startingPosition = getKingStartingPosition(playerIndex);
+          nextPos = startingPosition + nextProgress - 1;
+          if (nextPos >= 32) nextPos = nextPos - 32; // Wrap around
+        } else if (nextProgress === 33) {
+          // Transition from 32-box path to home stretch (Box 0)
+          nextPos = 0; // Box 0 (position 0)
+          // Play 32-box completion sound
+          playSound('32-box-complete');
+        } else {
+          // In home stretch - move towards home position
+          const homeStretchMoves = nextProgress - 32;
+          nextPos = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
+        }
+        
+        // Update king position
         const newKingPositions = [...kingPositions];
-        newKingPositions[playerIndex] = path[currentStep];
+        newKingPositions[playerIndex] = nextPos;
         setKingPositions(newKingPositions);
         
-        // Update progress for this step
-        const stepProgress = calculateProgressFromPosition(playerIndex, path[currentStep]);
+        // Update progress
         const newKingProgress = [...kingProgress];
-        newKingProgress[playerIndex] = stepProgress;
+        newKingProgress[playerIndex] = nextProgress;
         setKingProgress(newKingProgress);
         
         // Play king movement sound for each step
         playSound('move');
         
-        console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${path[currentStep]}, progress: ${stepProgress}`);
+        console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${nextPos}, progress: ${nextProgress}`);
         
         currentStep++;
+        currentPos = nextPos;
+        currentProgressValue = nextProgress;
         
         // Continue to next step after a short delay
         setTimeout(moveOneStep, 300); // 300ms delay between steps for smooth visual effect
       } else {
-        // Update final progress
-        const newKingProgress = [...kingProgress];
-        newKingProgress[playerIndex] = finalProgress;
-        setKingProgress(newKingProgress);
-        
         console.log(`Step-by-step movement completed for ${TEAMS[playerIndex]} king`);
+        
+        // Reset points for this player after king movement is complete
+        const newPoints = [...playerPoints];
+        newPoints[playerIndex] = 0;
+        setPlayerPoints(newPoints);
         
         // Check for victory
         if (finalProgress >= 40) {
@@ -1052,13 +1152,13 @@ function App() {
     moveOneStep();
   };
 
-  // Helper function to calculate progress from position (1-40 system)
+  // Helper function to calculate progress from position (0-based indexing)
   const calculateProgressFromPosition = (playerIndex, position) => {
     const startingPosition = getKingStartingPosition(playerIndex);
     
-    if (position >= 1 && position <= 8) {
-      // In home stretch (Box 1-8) - progress 33-40
-      return 32 + position; // Box 1 = progress 33, Box 8 = progress 40
+    if (position >= 0 && position <= 7) {
+      // In home stretch (Box 0-7) - progress 33-40
+      return 32 + position + 1; // Box 0 = progress 33, Box 7 = progress 40
     } else {
       // In full round (32-box path) - progress 1-32
       if (position >= startingPosition) {
@@ -1095,14 +1195,14 @@ function App() {
         // Still in full round phase (1-32 progress)
         // Calculate position on the 32-box path
         newPosition = startingPosition + newProgress - 1;
-        if (newPosition > 32) {
+        if (newPosition >= 32) {
           newPosition = newPosition - 32; // Wrap around
         }
       } else if (newProgress <= 40) {
         // Home stretch phase (33-40 progress)
-        // After 32 boxes, continue from Box 1 onwards
+        // After 32 boxes, continue from Box 0 onwards
         const homeStretchMoves = newProgress - 32;
-        newPosition = homeStretchMoves; // Box 1 (position 1), Box 2 (position 2), etc.
+        newPosition = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
         
         // Play 32-box completion sound when entering home stretch
         if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
@@ -1110,7 +1210,7 @@ function App() {
         }
       } else {
         // Victory! (40+ progress)
-        newPosition = 8; // Final home position (Box 8)
+        newPosition = 7; // Final home position (Box 7)
       }
       
       console.log(`King moving from position ${currentPosition} to ${newPosition}, progress: ${newProgress}`);
@@ -1128,7 +1228,7 @@ function App() {
         playSound('king-capture');
         
         newKingPositions[playerIndex] = startingPosition;
-        newKingProgress[playerIndex] = 0; // Reset progress when killed
+        newKingProgress[playerIndex] = 1; // Reset progress when killed
         setKingPositions(newKingPositions);
         setKingProgress(newKingProgress);
       } else {
@@ -1143,6 +1243,7 @@ function App() {
     
     // Check for victory (40 total moves: 32 full round + 8 home stretch)
     if (newKingProgress[playerIndex] >= 40) {
+      setWinningPlayer(playerIndex); // Set the actual winner
       setGamePhase('victory');
       playSound('victory');
       return true; // Victory achieved
@@ -1242,12 +1343,13 @@ function App() {
 
   const getKingStartingPosition = (teamIndex) => {
     // Starting positions: Blue=B1, Red=B9, Yellow=B17, Green=B25 (using 1-32 system)
+    // But we need to use 0-based indexing for the actual positions
     switch (teamIndex) {
-      case 0: return 1; // Blue: B1
-      case 1: return 9; // Red: B9
-      case 2: return 17; // Yellow: B17
-      case 3: return 25; // Green: B25
-      default: return 1;
+      case 0: return 0; // Blue: B1 (position 0)
+      case 1: return 8; // Red: B9 (position 8)
+      case 2: return 16; // Yellow: B17 (position 16)
+      case 3: return 24; // Green: B25 (position 24)
+      default: return 0;
     }
   };
 
@@ -1271,12 +1373,25 @@ function App() {
   };
 
   const handleModeSelect = (mode) => {
+    // Reset ALL game state when selecting a new mode
     setSelectedGameMode(mode);
+    setBoard([]);
+    setKingPositions([0, 8, 16, 24]); // Reset to first boxes (0-based indexing)
+    setCascadeHighlights([]);
+    setCurrentPlayer(0);
+    setSelectedPiece(null);
+    setPlayerPoints([0, 0, 0, 0]);
+    setKingProgress([1, 1, 1, 1]);
+    setPawnCaptures([0, 0, 0, 0]);
+    setGamePhase('setup');
+    setIsCascading(false);
     setAppPhase('game-splash');
   };
 
   const handleGameSplashComplete = () => {
     setAppPhase('game');
+    // Initialize fresh board when game starts
+    initializeBoard();
   };
 
   const handleBackToMenu = () => {
@@ -1284,12 +1399,12 @@ function App() {
     setSelectedGameMode(null);
     // Reset game state when going back to menu
     setBoard([]);
-    setKingPositions([1, 9, 17, 25]); // Using 1-32 system
+    setKingPositions([0, 8, 16, 24]); // Using 0-based indexing for first boxes
     setCascadeHighlights([]);
     setCurrentPlayer(0);
     setSelectedPiece(null);
     setPlayerPoints([0, 0, 0, 0]);
-    setKingProgress([0, 0, 0, 0]);
+    setKingProgress([1, 1, 1, 1]);
     setPawnCaptures([0, 0, 0, 0]);
     setGamePhase('setup');
     setIsCascading(false);
@@ -1350,6 +1465,19 @@ function App() {
     }
   };
 
+  // Function to handle player name changes
+  const handlePlayerNameChange = (playerIndex, newName) => {
+    const newPlayerNames = [...playerNames];
+    newPlayerNames[playerIndex] = newName;
+    setPlayerNames(newPlayerNames);
+  };
+
+  // Function to skip current player's turn
+  const skipTurn = () => {
+    setSelectedPiece(null);
+    nextTurn();
+  };
+
   // Trigger AI move when it's AI's turn
   useEffect(() => {
     if (appPhase === 'game' && isAIPlayer(currentPlayer) && !isCascading) {
@@ -1363,14 +1491,22 @@ function App() {
   }
   
   if (appPhase === 'mode-selection') {
-    return <GameModeSelection onModeSelect={handleModeSelect} />;
+    return (
+      <GameModeSelection 
+        onModeSelect={handleModeSelect}
+        isSoundEnabled={isSoundEnabled}
+        setIsSoundEnabled={setIsSoundEnabled}
+        isBackgroundMusicEnabled={isBackgroundMusicEnabled}
+        setIsBackgroundMusicEnabled={setIsBackgroundMusicEnabled}
+      />
+    );
   }
   
   if (appPhase === 'game-splash') {
     return (
       <SplashScreen 
         onComplete={handleGameSplashComplete}
-                  title={`${selectedGameMode?.title || 'CrushLudoChess'}`}
+                  title={`${selectedGameMode?.title || 'Crush Ludo Chess'}`}
         subtitle="Game Starting..."
       />
     );
@@ -1386,7 +1522,7 @@ function App() {
       <header className="App-header">
         <div className="header-content">
           <img src="/crushludochesslogo.png" alt="CrushLudoChess Logo" className="game-logo" />
-          <h1>CrushLudoChess</h1>
+          <h1>Crush Ludo Chess</h1>
           {selectedGameMode && (
             <div className="game-mode-indicator">
               {selectedGameMode.title}
@@ -1399,100 +1535,76 @@ function App() {
 
               </header>
 
-      {/* Sound Controls - Outside Header */}
-      <div className="sound-controls-standalone">
-        <button 
-          className={`sound-btn ${isSoundEnabled ? 'enabled' : 'disabled'}`}
-          onClick={handleSoundToggle}
-          title="Game Sounds"
-        >
-          {isSoundEnabled ? '🔊' : '🔇'}
-        </button>
-        <button 
-          className={`sound-btn ${isBackgroundMusicEnabled ? 'enabled' : 'disabled'}`}
-          onClick={handleMusicToggle}
-          title="Background Music"
-        >
-          {isBackgroundMusicEnabled ? '🎵' : '🔇'}
-        </button>
-      </div>
 
-      {/* Player Panels - Absolutely Positioned */}
-      <div className={`player-panel yellow-panel ${currentPlayer === 2 ? 'current-turn' : ''}`}>
-        <div className="player-header">
-          <div className="player-color" style={{backgroundColor: TEAM_COLORS[2]}}></div>
-          <input 
-            type="text" 
-            value={playerNames[2]} 
-            onChange={(e) => {
-              const newNames = [...playerNames];
-              newNames[2] = e.target.value;
-              setPlayerNames(newNames);
-            }}
-            className="player-name-input"
-            placeholder="Yellow Player Name"
-          />
-          {isAIPlayer(2) && <span className="ai-indicator">🤖 AI</span>}
-          <span className="stat">Score: {playerPoints[2]}</span>
-        </div>
-      </div>
-      <div className={`player-panel green-panel ${currentPlayer === 3 ? 'current-turn' : ''}`}>
-        <div className="player-header">
-          <div className="player-color" style={{backgroundColor: TEAM_COLORS[3]}}></div>
-          <input 
-            type="text" 
-            value={playerNames[3]} 
-            onChange={(e) => {
-              const newNames = [...playerNames];
-              newNames[3] = e.target.value;
-              setPlayerNames(newNames);
-            }}
-            className="player-name-input"
-            placeholder="Green Player Name"
-          />
-          {isAIPlayer(3) && <span className="ai-indicator">🤖 AI</span>}
-          <span className="stat">Score: {playerPoints[3]}</span>
-        </div>
-      </div>
-      <div className={`player-panel red-panel ${currentPlayer === 1 ? 'current-turn' : ''}`}>
-        <div className="player-header">
-          <div className="player-color" style={{backgroundColor: TEAM_COLORS[1]}}></div>
-          <input 
-            type="text" 
-            value={playerNames[1]} 
-            onChange={(e) => {
-              const newNames = [...playerNames];
-              newNames[1] = e.target.value;
-              setPlayerNames(newNames);
-            }}
-            className="player-name-input"
-            placeholder="Red Player Name"
-          />
-          {isAIPlayer(1) && <span className="ai-indicator">🤖 AI</span>}
-          <span className="stat">Score: {playerPoints[1]}</span>
-        </div>
-      </div>
-      <div className={`player-panel blue-panel ${currentPlayer === 0 ? 'current-turn' : ''}`}>
-        <div className="player-header">
-          <div className="player-color" style={{backgroundColor: TEAM_COLORS[0]}}></div>
+
+      {/* Main Board Section */}
+      <div className="board-container">
+        {/* Player Info Containers */}
+        <div className="player-info-container player-info-blue">
           <input 
             type="text" 
             value={playerNames[0]} 
-            onChange={(e) => {
-              const newNames = [...playerNames];
-              newNames[0] = e.target.value;
-              setPlayerNames(newNames);
-            }}
+            onChange={(e) => handlePlayerNameChange(0, e.target.value)}
             className="player-name-input"
-            placeholder="Blue Player Name"
+            placeholder="Enter Blue Player Name"
           />
-          {isAIPlayer(0) && <span className="ai-indicator">🤖 AI</span>}
-          <span className="stat">Score: {playerPoints[0]}</span>
+          <div>Points: {playerPoints[0]} | Progress: {kingProgress[0]}/40</div>
         </div>
-      </div>
+        <div className="player-info-container player-info-red">
+          <input 
+            type="text" 
+            value={playerNames[1]} 
+            onChange={(e) => handlePlayerNameChange(1, e.target.value)}
+            className="player-name-input"
+            placeholder="Enter Red Player Name"
+          />
+          <div>Points: {playerPoints[1]} | Progress: {kingProgress[1]}/40</div>
+        </div>
+        <div className="player-info-container player-info-yellow">
+          <input 
+            type="text" 
+            value={playerNames[2]} 
+            onChange={(e) => handlePlayerNameChange(2, e.target.value)}
+            className="player-name-input"
+            placeholder="Enter Yellow Player Name"
+          />
+          <div>Points: {playerPoints[2]} | Progress: {kingProgress[2]}/40</div>
+        </div>
+        <div className="player-info-container player-info-green">
+          <input 
+            type="text" 
+            value={playerNames[3]} 
+            onChange={(e) => handlePlayerNameChange(3, e.target.value)}
+            className="player-name-input"
+            placeholder="Enter Green Player Name"
+          />
+          <div>Points: {playerPoints[3]} | Progress: {kingProgress[3]}/40</div>
+        </div>
 
-      {/* Main Board Section - Now Column Flex */}
-      <div className="main-board-section">
+        {/* Skip Turn Arrow Buttons */}
+        {currentPlayer === 0 && (
+          <button className="skip-turn-btn skip-turn-blue" onClick={skipTurn} title="Skip Turn">
+            ⬆️
+          </button>
+        )}
+        {currentPlayer === 1 && (
+          <button className="skip-turn-btn skip-turn-red" onClick={skipTurn} title="Skip Turn">
+            ⬅️
+          </button>
+        )}
+        {currentPlayer === 2 && (
+          <button className="skip-turn-btn skip-turn-yellow" onClick={skipTurn} title="Skip Turn">
+            ⬇️
+          </button>
+        )}
+        {currentPlayer === 3 && (
+          <button className="skip-turn-btn skip-turn-green" onClick={skipTurn} title="Skip Turn">
+            ➡️
+          </button>
+        )}
+        
+        {/* Main Board Section - Now Column Flex */}
+        <div className="main-board-section">
         {/* Top King Path (B17-B24) - Yellow Player */}
         <div className="king-path-top">
           {Array(8).fill(null).map((_, index) => {
@@ -1607,12 +1719,13 @@ function App() {
           })}
         </div>
       </div>
+      </div>
 
       {gamePhase === 'victory' && (
         <div className="victory-modal">
           <div className="victory-content">
             <h2>🎉 VICTORY! 🎉</h2>
-            <p>Player {TEAMS[currentPlayer].toUpperCase()} wins!</p>
+            <p>Player {TEAMS[winningPlayer].toUpperCase()} wins!</p>
             <button onClick={initializeBoard}>Play Again</button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './GameModeSelection.css';
 
-const GameModeSelection = ({ onModeSelect }) => {
+const GameModeSelection = ({ onModeSelect, isSoundEnabled, setIsSoundEnabled, isBackgroundMusicEnabled, setIsBackgroundMusicEnabled }) => {
   const [selectedMode, setSelectedMode] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -68,9 +68,24 @@ const GameModeSelection = ({ onModeSelect }) => {
             <div className="logo-container">
               <img src="/crushludochesslogo.png" alt="CrushLudoChess Logo" className="mode-logo" />
             </div>
-            <h1 className="mode-title">CrushLudoChess</h1>
-            <h2 className="mode-subtitle">Choose Game Mode</h2>
-            <p className="mode-description">Select how many players will join the game</p>
+            <h1 className="mode-title">Crush Ludo Chess</h1>
+            <p className="mode-tagline">Crush Ludo Chess - The Ultimate 4 Player Game!</p>
+            <div className="audio-controls">
+              <button 
+                className={`audio-button ${isSoundEnabled ? 'enabled' : 'disabled'}`}
+                onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+                title={isSoundEnabled ? 'Sound On' : 'Sound Off'}
+              >
+                {isSoundEnabled ? '🔊' : '🔇'}
+              </button>
+              <button 
+                className={`audio-button ${isBackgroundMusicEnabled ? 'enabled' : 'disabled'}`}
+                onClick={() => setIsBackgroundMusicEnabled(!isBackgroundMusicEnabled)}
+                title={isBackgroundMusicEnabled ? 'Music On' : 'Music Off'}
+              >
+                {isBackgroundMusicEnabled ? '🎵' : '🔇'}
+              </button>
+            </div>
           </div>
 
           <div className="mode-grid">
@@ -84,18 +99,6 @@ const GameModeSelection = ({ onModeSelect }) => {
                 <div className="mode-icon">{mode.icon}</div>
                 <h3 className="mode-card-title">{mode.title}</h3>
                 <p className="mode-card-description">{mode.description}</p>
-                
-                <div className="player-list">
-                  {mode.players.map((player, index) => (
-                    <div key={index} className="player-item">
-                      <span className="player-avatar">
-                        {player === 'You' ? '👤' : 
-                         player === 'AI' ? '🤖' : '👥'}
-                      </span>
-                      <span className="player-name">{player}</span>
-                    </div>
-                  ))}
-                </div>
 
                 <div className="mode-card-overlay">
                   <span className="play-button">▶ PLAY</span>
@@ -104,9 +107,8 @@ const GameModeSelection = ({ onModeSelect }) => {
             ))}
           </div>
 
-          <div className="mode-footer">
-            <p className="footer-text">CrushLudoChess - The Ultimate 4 Player Game!</p>
-          </div>
+                          <div className="mode-footer">
+                </div>
         </div>
       </div>
     </div>

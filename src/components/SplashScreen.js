@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './SplashScreen.css';
 
-const SplashScreen = ({ onComplete, title = "CrushLudoChess", subtitle = "The Ultimate 4 Player Game" }) => {
+const SplashScreen = ({ onComplete, title = "Crush Ludo Chess", subtitle = "The Ultimate 4 Player Game" }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [logoScale, setLogoScale] = useState(0);
   const [textOpacity, setTextOpacity] = useState(0);
