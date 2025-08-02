@@ -829,72 +829,150 @@
   position: absolute;
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
-  border-radius: 6px;
-  padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  font-size: 0.7em;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-size: 0.8em;
   font-weight: 600;
   color: white;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-  width: 160px; /* Wider but smaller height */
+  width: 180px;
   text-align: center;
-  z-index: 1000; /* Ensure visibility above board */
-  white-space: nowrap; /* Prevent text wrapping */
-  overflow: hidden; /* Hide overflow text */
-  display: none; /* HIDDEN - will restore when requested */
+  z-index: 1000;
+  white-space: nowrap;
+  overflow: hidden;
+  display: block;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Blue Player Info (Bottom) - Faces Blue Player */
 .player-info-blue {
-  bottom: 0px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(145deg, rgba(0, 102, 204, 0.8), rgba(0, 102, 204, 0.6));
-  border-color: rgba(0, 102, 204, 0.5);
+  background: linear-gradient(145deg, rgba(0, 102, 204, 0.9), rgba(0, 102, 204, 0.7));
+  border-color: rgba(0, 102, 204, 0.6);
+  transition: all 0.3s ease;
+}
+
+.player-info-blue .player-name-input,
+.player-info-blue div {
+  transform: rotate(0deg); /* Normal orientation for bottom player */
+}
+
+.player-info-blue.current-turn {
+  background: linear-gradient(145deg, rgba(0, 102, 204, 1), rgba(0, 102, 204, 0.8));
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 15px rgba(0, 102, 204, 0.6);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.player-info-blue.current-turn .player-name-input,
+.player-info-blue.current-turn div {
+  transform: rotate(0deg) scale(1.05);
 }
 
 /* Red Player Info (Right) - Faces Red Player */
 .player-info-red {
-  right: 0px;
+  right: 20px;
   top: 50%;
-  transform: translateY(-50%) rotate(90deg);
-  background: linear-gradient(145deg, rgba(204, 0, 0, 0.8), rgba(204, 0, 0, 0.6));
-  border-color: rgba(204, 0, 0, 0.5);
+  transform: translateY(-50%);
+  background: linear-gradient(145deg, rgba(204, 0, 0, 0.9), rgba(204, 0, 0, 0.7));
+  border-color: rgba(204, 0, 0, 0.6);
+  transition: all 0.3s ease;
+}
+
+.player-info-red .player-name-input,
+.player-info-red div {
+  transform: rotate(-90deg); /* Rotate text to face right player */
+}
+
+.player-info-red.current-turn {
+  background: linear-gradient(145deg, rgba(204, 0, 0, 1), rgba(204, 0, 0, 0.8));
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 15px rgba(204, 0, 0, 0.6);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.player-info-red.current-turn .player-name-input,
+.player-info-red.current-turn div {
+  transform: rotate(-90deg) scale(1.05);
 }
 
 /* Yellow Player Info (Top) - Faces Yellow Player */
 .player-info-yellow {
   top: 20px;
   left: 50%;
-  transform: translateX(-50%) rotate(180deg);
-  background: linear-gradient(145deg, rgba(255, 140, 0, 0.8), rgba(255, 140, 0, 0.6));
-  border-color: rgba(255, 140, 0, 0.5);
+  transform: translateX(-50%);
+  background: linear-gradient(145deg, rgba(255, 140, 0, 0.9), rgba(255, 140, 0, 0.7));
+  border-color: rgba(255, 140, 0, 0.6);
+  transition: all 0.3s ease;
+}
+
+.player-info-yellow .player-name-input,
+.player-info-yellow div {
+  transform: rotate(180deg); /* Rotate text to face top player */
+}
+
+.player-info-yellow.current-turn {
+  background: linear-gradient(145deg, rgba(255, 140, 0, 1), rgba(255, 140, 0, 0.8));
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 15px rgba(255, 140, 0, 0.6);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.player-info-yellow.current-turn .player-name-input,
+.player-info-yellow.current-turn div {
+  transform: rotate(180deg) scale(1.05);
 }
 
 /* Green Player Info (Left) - Faces Green Player */
 .player-info-green {
-  left: 0px;
+  left: 20px;
   top: 50%;
-  transform: translateY(-50%) rotate(-90deg);
-  background: linear-gradient(145deg, rgba(0, 170, 0, 0.8), rgba(0, 170, 0, 0.6));
-  border-color: rgba(0, 170, 0, 0.5);
+  transform: translateY(-50%);
+  background: linear-gradient(145deg, rgba(0, 170, 0, 0.9), rgba(0, 170, 0, 0.7));
+  border-color: rgba(0, 170, 0, 0.6);
+  transition: all 0.3s ease;
+}
+
+.player-info-green .player-name-input,
+.player-info-green div {
+  transform: rotate(90deg); /* Rotate text to face left player */
+}
+
+.player-info-green.current-turn {
+  background: linear-gradient(145deg, rgba(0, 170, 0, 1), rgba(0, 170, 0, 0.8));
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 15px rgba(0, 170, 0, 0.6);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.player-info-green.current-turn .player-name-input,
+.player-info-green.current-turn div {
+  transform: rotate(90deg) scale(1.05);
 }
 
 /* Player Name Input Styling */
 .player-name-input {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-  padding: 4px 6px;
+  border-radius: 4px;
+  padding: 6px 8px;
   color: white;
-  font-size: 0.7em;
+  font-size: 0.75em;
   font-weight: 600;
   text-align: center;
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   backdrop-filter: blur(5px);
   box-sizing: border-box;
+  max-width: 160px;
 }
 
 .player-name-input::placeholder {
@@ -1196,6 +1274,17 @@
   100% { transform: scale(1); opacity: 0.8; }
 }
 
+@keyframes victoryFadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes victoryScaleIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 .piece {
   font-size: 1.5em;
   font-weight: bold;
@@ -1222,19 +1311,24 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
+  animation: victoryFadeIn 0.5s ease-in;
 }
 
 .victory-content {
-  background: white;
-  padding: 40px;
-  border-radius: 20px;
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
+  padding: 50px;
+  border-radius: 25px;
   text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 3px solid #ff6b6b;
+  animation: victoryScaleIn 0.6s ease-out;
+  max-width: 90vw;
+  max-height: 90vh;
 }
 
 .victory-content h2 {
@@ -1338,16 +1432,18 @@
   
   /* Mobile Player Info Containers - Compact and no overlap */
   .player-info-container {
-    width: 85px;
-    padding: 3px 4px;
-    font-size: 0.5em;
-    border-radius: 4px;
+    width: 120px;
+    padding: 6px 8px;
+    font-size: 0.6em;
+    border-radius: 6px;
+    min-height: 50px;
   }
   
   .player-name-input {
-    font-size: 0.6em;
-    padding: 3px 4px;
-    margin-bottom: 3px;
+    font-size: 0.65em;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    max-width: 100px;
   }
   
   /* Position player info containers with adequate spacing */
@@ -1360,19 +1456,19 @@
   .player-info-red {
     right: 15px;
     top: 50%;
-    transform: translateY(-50%) rotate(90deg);
+    transform: translateY(-50%);
   }
   
   .player-info-yellow {
     top: 15px;
     left: 50%;
-    transform: translateX(-50%) rotate(180deg);
+    transform: translateX(-50%);
   }
   
   .player-info-green {
     left: 15px;
     top: 50%;
-    transform: translateY(-50%) rotate(-90deg);
+    transform: translateY(-50%);
   }
   
   /* Skip turn buttons - compact positioning */
@@ -1494,16 +1590,18 @@
   
   /* Extra Small Mobile Player Info Containers */
   .player-info-container {
-    width: 70px;
-    padding: 2px 3px;
-    font-size: 0.45em;
-    border-radius: 3px;
+    width: 90px;
+    padding: 4px 6px;
+    font-size: 0.5em;
+    border-radius: 4px;
+    min-height: 40px;
   }
   
   .player-name-input {
-    font-size: 0.5em;
-    padding: 2px 3px;
-    margin-bottom: 2px;
+    font-size: 0.55em;
+    padding: 3px 4px;
+    margin-bottom: 3px;
+    max-width: 80px;
   }
   
   /* Position player info containers with minimal spacing */
@@ -1516,19 +1614,19 @@
   .player-info-red {
     right: 10px;
     top: 50%;
-    transform: translateY(-50%) rotate(90deg);
+    transform: translateY(-50%);
   }
   
   .player-info-yellow {
     top: 10px;
     left: 50%;
-    transform: translateX(-50%) rotate(180deg);
+    transform: translateX(-50%);
   }
   
   .player-info-green {
     left: 10px;
     top: 50%;
-    transform: translateY(-50%) rotate(-90deg);
+    transform: translateY(-50%);
   }
   
   /* Skip turn buttons - minimal size */

@@ -1243,6 +1243,8 @@ function App() {
     
     // Check for victory (40 total moves: 32 full round + 8 home stretch)
     if (newKingProgress[playerIndex] >= 40) {
+      console.log(`🎉 VICTORY ACHIEVED! Player ${playerIndex} (${TEAMS[playerIndex]}) has won!`);
+      console.log(`Progress: ${newKingProgress[playerIndex]}/40`);
       setWinningPlayer(playerIndex); // Set the actual winner
       setGamePhase('victory');
       playSound('victory');
@@ -1485,6 +1487,17 @@ function App() {
     }
   }, [currentPlayer, appPhase, isCascading]);
 
+  // Monitor king progress for victory
+  useEffect(() => {
+    const winningPlayerIndex = kingProgress.findIndex(progress => progress >= 40);
+    if (winningPlayerIndex !== -1 && gamePhase !== 'victory') {
+      console.log(`🎉 VICTORY DETECTED! Player ${winningPlayerIndex} (${TEAMS[winningPlayerIndex]}) has won!`);
+      setWinningPlayer(winningPlayerIndex);
+      setGamePhase('victory');
+      playSound('victory');
+    }
+  }, [kingProgress, gamePhase]);
+
   // Render based on app phase
   if (appPhase === 'splash') {
     return <SplashScreen onComplete={handleSplashComplete} />;
@@ -1532,6 +1545,30 @@ function App() {
         <button className="back-to-menu-btn" onClick={handleBackToMenu}>
           ← Back to Menu
         </button>
+        <button 
+          className="test-victory-btn" 
+          onClick={() => {
+            console.log('Testing victory...');
+            setWinningPlayer(0);
+            setGamePhase('victory');
+            playSound('victory');
+          }}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: '#ff6b6b',
+            color: 'white',
+            border: 'none',
+            padding: '5px 10px',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            zIndex: 10000
+          }}
+        >
+          Test Victory
+        </button>
 
               </header>
 
@@ -1540,7 +1577,7 @@ function App() {
       {/* Main Board Section */}
       <div className="board-container">
         {/* Player Info Containers */}
-        <div className="player-info-container player-info-blue">
+        <div className={`player-info-container player-info-blue ${currentPlayer === 0 ? 'current-turn' : ''}`}>
           <input 
             type="text" 
             value={playerNames[0]} 
@@ -1550,7 +1587,7 @@ function App() {
           />
           <div>Points: {playerPoints[0]} | Progress: {kingProgress[0]}/40</div>
         </div>
-        <div className="player-info-container player-info-red">
+        <div className={`player-info-container player-info-red ${currentPlayer === 1 ? 'current-turn' : ''}`}>
           <input 
             type="text" 
             value={playerNames[1]} 
@@ -1560,7 +1597,7 @@ function App() {
           />
           <div>Points: {playerPoints[1]} | Progress: {kingProgress[1]}/40</div>
         </div>
-        <div className="player-info-container player-info-yellow">
+        <div className={`player-info-container player-info-yellow ${currentPlayer === 2 ? 'current-turn' : ''}`}>
           <input 
             type="text" 
             value={playerNames[2]} 
@@ -1570,7 +1607,7 @@ function App() {
           />
           <div>Points: {playerPoints[2]} | Progress: {kingProgress[2]}/40</div>
         </div>
-        <div className="player-info-container player-info-green">
+        <div className={`player-info-container player-info-green ${currentPlayer === 3 ? 'current-turn' : ''}`}>
           <input 
             type="text" 
             value={playerNames[3]} 
@@ -1721,11 +1758,11 @@ function App() {
       </div>
       </div>
 
-      {gamePhase === 'victory' && (
+      {(gamePhase === 'victory' || kingProgress.some(progress => progress >= 40)) && (
         <div className="victory-modal">
           <div className="victory-content">
             <h2>🎉 VICTORY! 🎉</h2>
-            <p>Player {TEAMS[winningPlayer].toUpperCase()} wins!</p>
+            <p>Player {TEAMS[winningPlayer || kingProgress.findIndex(progress => progress >= 40)]?.toUpperCase()} wins!</p>
             <button onClick={initializeBoard}>Play Again</button>
           </div>
         </div>
