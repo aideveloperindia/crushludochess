@@ -1597,8 +1597,7 @@ function App() {
         </div>
         */}
 
-        {/* Skip Turn Arrow Buttons - HIDDEN */}
-        {/*
+        {/* Skip Turn Arrow Buttons */}
         {currentPlayer === 0 && (
           <button className="skip-turn-btn skip-turn-blue" onClick={skipTurn} title="Skip Turn">
             ⬆️
@@ -1619,7 +1618,6 @@ function App() {
             ➡️
           </button>
         )}
-        */}
         
         {/* Main Board Section - Now Column Flex */}
         <div className="main-board-section">
