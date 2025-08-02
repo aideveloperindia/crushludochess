@@ -1553,7 +1553,8 @@ function App() {
 
       {/* Main Board Section */}
       <div className="board-container">
-        {/* Player Info Containers */}
+        {/* Player Info Containers - HIDDEN */}
+        {/* 
         <div className={`player-info-container player-info-blue ${currentPlayer === 0 ? 'current-turn' : ''}`}>
           <input 
             type="text" 
@@ -1594,8 +1595,10 @@ function App() {
           />
           <div>Points: {playerPoints[3]} | Progress: {kingProgress[3]}/40</div>
         </div>
+        */}
 
-        {/* Skip Turn Arrow Buttons */}
+        {/* Skip Turn Arrow Buttons - HIDDEN */}
+        {/*
         {currentPlayer === 0 && (
           <button className="skip-turn-btn skip-turn-blue" onClick={skipTurn} title="Skip Turn">
             ⬆️
@@ -1616,6 +1619,7 @@ function App() {
             ➡️
           </button>
         )}
+        */}
         
         {/* Main Board Section - Now Column Flex */}
         <div className="main-board-section">
