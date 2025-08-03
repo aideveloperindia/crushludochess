@@ -15,7 +15,7 @@ const PIECE_VALUES = {
 
 // Team colors and positions
 const TEAMS = ['blue', 'red', 'yellow', 'green'];
-const TEAM_COLORS = ['#0066cc', '#cc0000', '#ff8c00', '#00aa00']; // Blue, Red, Orange, Green
+const TEAM_COLORS = ['#4A90E2', '#E74C3C', '#F39C12', '#27AE60']; // Soft Blue, Soft Red, Soft Orange, Soft Green
 
 function App() {
   // Game flow states
@@ -33,9 +33,27 @@ function App() {
   const [pawnCaptures, setPawnCaptures] = useState([0, 0, 0, 0]); // Track pawn captures per player
   const [gamePhase, setGamePhase] = useState('setup');
   const [winningPlayer, setWinningPlayer] = useState(null); // Track the actual winner
+  const [showQueenKillModal, setShowQueenKillModal] = useState(false);
+  const [showThroneModal, setShowThroneModal] = useState(false);
+  const [killedQueenTeam, setKilledQueenTeam] = useState(null);
+  const [throneTeam, setThroneTeam] = useState(null);
 
   const [isCascading, setIsCascading] = useState(false);
-  const [playerNames, setPlayerNames] = useState(['Player Blue', 'Player Red', 'Player Yellow', 'Player Green']);
+  const [playerNames, setPlayerNames] = useState(['Name', 'Name', 'Name', 'Name']);
+  
+  // Indian AI player names
+  const AI_NAMES = {
+    1: ['Arjun', 'Priya', 'Vikram', 'Anjali'],
+    2: ['Rahul', 'Meera', 'Aditya', 'Zara'],
+    3: ['Krishna', 'Lakshmi', 'Shiva', 'Parvati']
+  };
+  
+  // Define which positions are human players for each game mode
+  const HUMAN_POSITIONS = {
+    1: [0], // Blue only
+    2: [0, 2], // Blue and Yellow
+    3: [0, 1, 2] // Blue, Red, and Yellow
+  };
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isBackgroundMusicEnabled, setIsBackgroundMusicEnabled] = useState(true);
 
@@ -235,6 +253,31 @@ function App() {
 
 
   const initializeBoard = () => {
+    // Set AI names based on game mode
+    if (selectedGameMode) {
+      const aiNames = AI_NAMES[selectedGameMode.aiPlayers] || AI_NAMES[1];
+      const newPlayerNames = [...playerNames];
+      const humanPositions = HUMAN_POSITIONS[selectedGameMode.aiPlayers] || [0];
+      
+      // Set default names for human players at specific positions
+      humanPositions.forEach((position, index) => {
+        if (newPlayerNames[position] === 'Name') {
+          newPlayerNames[position] = `Player ${index + 1}`;
+        }
+      });
+      
+      // Set AI names for AI players at remaining positions
+      let aiIndex = 0;
+      for (let i = 0; i < 4; i++) {
+        if (!humanPositions.includes(i)) {
+          newPlayerNames[i] = aiNames[aiIndex];
+          aiIndex++;
+        }
+      }
+      
+      setPlayerNames(newPlayerNames);
+    }
+    
     const newBoard = Array(8).fill(null).map(() => Array(8).fill(null));
     
     // ULTRA HARDCODE: Define queen positions and their surrounding pieces
@@ -810,16 +853,20 @@ function App() {
     newBoard[toRow][toCol] = piece;
     newBoard[fromRow][fromCol] = null;
     
-    // Handle capture
-    if (capturedPiece) {
-      // Play specific sound based on captured piece type
-      if (capturedPiece.type === 'queen') {
-        playSound('queen-capture');
-      } else if (capturedPiece.type === 'king') {
-        playSound('king-capture');
-      } else {
-        playSound('capture');
-      }
+          // Handle capture
+      if (capturedPiece) {
+        // Play specific sound based on captured piece type
+        if (capturedPiece.type === 'queen') {
+          playSound('queen-capture');
+          // Show queen kill modal
+          setKilledQueenTeam(TEAMS[capturedPiece.teamIndex]);
+          setShowQueenKillModal(true);
+          setTimeout(() => setShowQueenKillModal(false), 3000); // Hide after 3 seconds
+        } else if (capturedPiece.type === 'king') {
+          playSound('king-capture');
+        } else {
+          playSound('capture');
+        }
       
       const points = getCapturePoints(capturedPiece.type, currentPlayer);
       console.log(`Capture! ${TEAMS[currentPlayer]} captured ${capturedPiece.type} worth ${points} points`);
@@ -1126,6 +1173,15 @@ function App() {
         
         console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${nextPos}, progress: ${nextProgress}`);
         
+        // Check for immediate victory when king reaches throne box (Box 7, position 7)
+        if (nextPos === 7 && nextProgress >= 40) {
+          console.log(`VICTORY! ${TEAMS[playerIndex]} king reached throne box!`);
+          setWinningPlayer(playerIndex);
+          setGamePhase('victory');
+          playSound('victory');
+          return; // Stop movement immediately
+        }
+        
         currentStep++;
         currentPos = nextPos;
         currentProgressValue = nextProgress;
@@ -1140,8 +1196,9 @@ function App() {
         newPoints[playerIndex] = 0;
         setPlayerPoints(newPoints);
         
-        // Check for victory
-        if (finalProgress >= 40) {
+        // Check for victory (only if not already declared during movement)
+        if (finalProgress >= 40 && gamePhase !== 'victory') {
+          setWinningPlayer(playerIndex);
           setGamePhase('victory');
           playSound('victory');
         }
@@ -1207,6 +1264,10 @@ function App() {
         // Play 32-box completion sound when entering home stretch
         if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
           playSound('32-box-complete');
+          // Show throne modal
+          setThroneTeam(TEAMS[playerIndex]);
+          setShowThroneModal(true);
+          setTimeout(() => setShowThroneModal(false), 3000); // Hide after 3 seconds
         }
       } else {
         // Victory! (40+ progress)
@@ -1231,6 +1292,7 @@ function App() {
         newKingProgress[playerIndex] = 1; // Reset progress when killed
         setKingPositions(newKingPositions);
         setKingProgress(newKingProgress);
+        return false; // Don't continue with normal flow - king was killed
       } else {
         // Safe move - move step by step
         moveKingStepByStepFixed(playerIndex, currentPosition, newPosition, newProgress);
@@ -1242,9 +1304,8 @@ function App() {
     console.log(`Updated king progress:`, newKingProgress);
     
     // Check for victory (40 total moves: 32 full round + 8 home stretch)
-    if (newKingProgress[playerIndex] >= 40) {
-      console.log(`🎉 VICTORY ACHIEVED! Player ${playerIndex} (${TEAMS[playerIndex]}) has won!`);
-      console.log(`Progress: ${newKingProgress[playerIndex]}/40`);
+    // Victory is only declared when king reaches throne box (position 7) with progress >= 40
+    if (newKingProgress[playerIndex] >= 40 && newKingPositions[playerIndex] === 7) {
       setWinningPlayer(playerIndex); // Set the actual winner
       setGamePhase('victory');
       playSound('victory');
@@ -1487,17 +1548,6 @@ function App() {
     }
   }, [currentPlayer, appPhase, isCascading]);
 
-  // Monitor king progress for victory
-  useEffect(() => {
-    const winningPlayerIndex = kingProgress.findIndex(progress => progress >= 40);
-    if (winningPlayerIndex !== -1 && gamePhase !== 'victory') {
-      console.log(`🎉 VICTORY DETECTED! Player ${winningPlayerIndex} (${TEAMS[winningPlayerIndex]}) has won!`);
-      setWinningPlayer(winningPlayerIndex);
-      setGamePhase('victory');
-      playSound('victory');
-    }
-  }, [kingProgress, gamePhase]);
-
   // Render based on app phase
   if (appPhase === 'splash') {
     return <SplashScreen onComplete={handleSplashComplete} />;
@@ -1546,202 +1596,237 @@ function App() {
           ← Back to Menu
         </button>
 
-
               </header>
 
 
 
       {/* Main Board Section */}
       <div className="board-container">
-        {/* Player Info Containers - HIDDEN */}
-        {/* 
-        <div className={`player-info-container player-info-blue ${currentPlayer === 0 ? 'current-turn' : ''}`}>
-          <input 
-            type="text" 
-            value={playerNames[0]} 
-            onChange={(e) => handlePlayerNameChange(0, e.target.value)}
-            className="player-name-input"
-            placeholder="Enter Blue Player Name"
-          />
-          <div>Points: {playerPoints[0]} | Progress: {kingProgress[0]}/40</div>
-        </div>
-        <div className={`player-info-container player-info-red ${currentPlayer === 1 ? 'current-turn' : ''}`}>
-          <input 
-            type="text" 
-            value={playerNames[1]} 
-            onChange={(e) => handlePlayerNameChange(1, e.target.value)}
-            className="player-name-input"
-            placeholder="Enter Red Player Name"
-          />
-          <div>Points: {playerPoints[1]} | Progress: {kingProgress[1]}/40</div>
-        </div>
-        <div className={`player-info-container player-info-yellow ${currentPlayer === 2 ? 'current-turn' : ''}`}>
-          <input 
-            type="text" 
-            value={playerNames[2]} 
-            onChange={(e) => handlePlayerNameChange(2, e.target.value)}
-            className="player-name-input"
-            placeholder="Enter Yellow Player Name"
-          />
-          <div>Points: {playerPoints[2]} | Progress: {kingProgress[2]}/40</div>
-        </div>
-        <div className={`player-info-container player-info-green ${currentPlayer === 3 ? 'current-turn' : ''}`}>
-          <input 
-            type="text" 
-            value={playerNames[3]} 
-            onChange={(e) => handlePlayerNameChange(3, e.target.value)}
-            className="player-name-input"
-            placeholder="Enter Green Player Name"
-          />
-          <div>Points: {playerPoints[3]} | Progress: {kingProgress[3]}/40</div>
-        </div>
-        */}
-
-        {/* Skip Turn Arrow Buttons */}
-        {currentPlayer === 0 && (
-          <button className="skip-turn-btn skip-turn-blue" onClick={skipTurn} title="Skip Turn">
-            ⬆️
-          </button>
-        )}
-        {currentPlayer === 1 && (
-          <button className="skip-turn-btn skip-turn-red" onClick={skipTurn} title="Skip Turn">
-            ⬅️
-          </button>
-        )}
-        {currentPlayer === 2 && (
-          <button className="skip-turn-btn skip-turn-yellow" onClick={skipTurn} title="Skip Turn">
-            ⬇️
-          </button>
-        )}
-        {currentPlayer === 3 && (
-          <button className="skip-turn-btn skip-turn-green" onClick={skipTurn} title="Skip Turn">
-            ➡️
-          </button>
-        )}
-        
-        {/* Main Board Section - Now Column Flex */}
         <div className="main-board-section">
-        {/* Top King Path (B17-B24) - Yellow Player */}
-        <div className="king-path-top">
-          {Array(8).fill(null).map((_, index) => {
-            const pathPosition = 23 - index; // B17-B24 (right to left)
-            const blueKingHere = kingPositions[0] === pathPosition;
-            const redKingHere = kingPositions[1] === pathPosition;
-            const yellowKingHere = kingPositions[2] === pathPosition;
-            const greenKingHere = kingPositions[3] === pathPosition;
-            return (
-              <div key={`top-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
-                {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
-                {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
-                {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
-                {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
-                <span className="path-number">{pathPosition + 1}</span>
-                {pathPosition === 23 && <div className="throne-label">👑</div>}
-              </div>
-            );
-          })}
-        </div>
-        {/* Middle Row: Left Path, Board, Right Path */}
-        <div className="board-middle-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-          {/* Left King Path (B25-B32) */}
-          <div className="king-path-left">
-            {Array(8).fill(null).map((_, index) => {
-              const pathPosition = 24 + index; // B25-B32 (sequential)
-              const blueKingHere = kingPositions[0] === pathPosition;
-              const redKingHere = kingPositions[1] === pathPosition;
-              const yellowKingHere = kingPositions[2] === pathPosition;
-              const greenKingHere = kingPositions[3] === pathPosition;
-              return (
-                <div key={`left-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
-                  {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
-                  {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
-                  {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
-                  {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
-                  <span className="path-number">{pathPosition + 1}</span>
-                  {pathPosition === 31 && <div className="throne-label">👑</div>}
-                </div>
-              );
-            })}
+          {/* Player Info Containers - Now positioned relative to main-board-section */}
+          <div className={`player-info-container player-info-blue ${currentPlayer === 0 ? 'current-turn' : ''}`}>
+            <input 
+              type="text" 
+              value={playerNames[0]} 
+              onChange={(e) => handlePlayerNameChange(0, e.target.value)}
+              className="player-name-input"
+              placeholder="Name"
+            />
+                         <div>Points: {playerPoints[0]} | Progress: {kingProgress[0]}/40</div>
           </div>
-          {/* Main 8x8 Chess Board */}
-          <div className="chess-board">
-            {board.map((row, rowIndex) => (
-              <div key={rowIndex} className="board-row">
-                {row.map((piece, colIndex) => (
-                  <div
-                    key={`${rowIndex}-${colIndex}`}
-                    className={`board-square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'} ${
-                      selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex ? 'selected' : ''
-                    } ${
-                      cascadeHighlights.some(h => h.row === rowIndex && h.col === colIndex) ? 'cascade-highlight' : ''
-                    }`}
-                    onClick={() => handleSquareClick(rowIndex, colIndex)}
-                  >
-                    {piece && (
-                      <div 
-                        className="piece"
-                        style={{ 
-                          color: TEAM_COLORS[piece.teamIndex],
-                          transform: `rotate(${getPieceRotation(piece.teamIndex, currentPlayer)}deg)`
-                        }}
-                      >
-                        {getPieceSymbol(piece)}
-                      </div>
-                    )}
+          <div className={`player-info-container player-info-red ${currentPlayer === 1 ? 'current-turn' : ''}`}>
+            <input 
+              type="text" 
+              value={playerNames[1]} 
+              onChange={(e) => handlePlayerNameChange(1, e.target.value)}
+              className="player-name-input"
+              placeholder="Name"
+            />
+                         <div>Points: {playerPoints[1]} | Progress: {kingProgress[1]}/40</div>
+          </div>
+          <div className={`player-info-container player-info-yellow ${currentPlayer === 2 ? 'current-turn' : ''}`}>
+            <input 
+              type="text" 
+              value={playerNames[2]} 
+              onChange={(e) => handlePlayerNameChange(2, e.target.value)}
+              className="player-name-input"
+              placeholder="Name"
+            />
+                         <div>Points: {playerPoints[2]} | Progress: {kingProgress[2]}/40</div>
+          </div>
+          <div className={`player-info-container player-info-green ${currentPlayer === 3 ? 'current-turn' : ''}`}>
+            <input 
+              type="text" 
+              value={playerNames[3]} 
+              onChange={(e) => handlePlayerNameChange(3, e.target.value)}
+              className="player-name-input"
+              placeholder="Name"
+            />
+                         <div>Points: {playerPoints[3]} | Progress: {kingProgress[3]}/40</div>
+          </div>
+          {/* Top Row: Top-Left Corner, Top Path, Top-Right Corner */}
+          <div className="board-top-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Top-Left Corner Box - Between Yellow and Green */}
+            <div className="corner-box corner-top-left">
+              {currentPlayer === 2 && (
+                <button className="skip-turn-btn skip-turn-yellow" onClick={skipTurn} title="Skip Turn">
+                  ⬇️
+                </button>
+              )}
+            </div>
+            {/* Top King Path (B17-B24) - Yellow Player */}
+            <div className="king-path-top">
+              {Array(8).fill(null).map((_, index) => {
+                const pathPosition = 23 - index; // B17-B24 (right to left)
+                const blueKingHere = kingPositions[0] === pathPosition;
+                const redKingHere = kingPositions[1] === pathPosition;
+                const yellowKingHere = kingPositions[2] === pathPosition;
+                const greenKingHere = kingPositions[3] === pathPosition;
+                return (
+                  <div key={`top-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                    {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                    {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                    {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                    {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                    <span className="path-number">{pathPosition + 1}</span>
+                    {pathPosition === 23 && <div className="throne-label">👑</div>}
                   </div>
-                ))}
-              </div>
-            ))}
+                );
+              })}
+            </div>
+            {/* Top-Right Corner Box - Between Red and Yellow */}
+            <div className="corner-box corner-top-right">
+              {currentPlayer === 1 && (
+                <button className="skip-turn-btn skip-turn-red" onClick={skipTurn} title="Skip Turn">
+                  ⬅️
+                </button>
+              )}
+            </div>
           </div>
-          {/* Right King Path (B9-B16) */}
-          <div className="king-path-right">
-            {Array(8).fill(null).map((_, index) => {
-              const pathPosition = 15 - index; // B9-B16 (bottom to top)
-              const blueKingHere = kingPositions[0] === pathPosition;
-              const redKingHere = kingPositions[1] === pathPosition;
-              const yellowKingHere = kingPositions[2] === pathPosition;
-              const greenKingHere = kingPositions[3] === pathPosition;
-              return (
-                <div key={`right-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
-                  {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
-                  {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
-                  {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
-                  {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
-                  <span className="path-number">{pathPosition + 1}</span>
-                  {pathPosition === 15 && <div className="throne-label">👑</div>}
+          
+          {/* Middle Row: Left Path, Board, Right Path */}
+          <div className="board-middle-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Left King Path (B25-B32) */}
+            <div className="king-path-left">
+              {Array(8).fill(null).map((_, index) => {
+                const pathPosition = 24 + index; // B25-B32 (sequential)
+                const blueKingHere = kingPositions[0] === pathPosition;
+                const redKingHere = kingPositions[1] === pathPosition;
+                const yellowKingHere = kingPositions[2] === pathPosition;
+                const greenKingHere = kingPositions[3] === pathPosition;
+                return (
+                  <div key={`left-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                    {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                    {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                    {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                    {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                    <span className="path-number">{pathPosition + 1}</span>
+                    {pathPosition === 31 && <div className="throne-label">👑</div>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Main 8x8 Chess Board */}
+            <div className="chess-board">
+              {board.map((row, rowIndex) => (
+                <div key={rowIndex} className="board-row">
+                  {row.map((piece, colIndex) => (
+                    <div
+                      key={`${rowIndex}-${colIndex}`}
+                      className={`board-square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'} ${
+                        selectedPiece && selectedPiece.row === rowIndex && selectedPiece.col === colIndex ? 'selected' : ''
+                      } ${
+                        cascadeHighlights.some(h => h.row === rowIndex && h.col === colIndex) ? 'cascade-highlight' : ''
+                      }`}
+                      onClick={() => handleSquareClick(rowIndex, colIndex)}
+                    >
+                      {piece && (
+                        <div 
+                          className="piece"
+                          style={{ 
+                            color: TEAM_COLORS[piece.teamIndex],
+                            transform: `rotate(${getPieceRotation(piece.teamIndex, currentPlayer)}deg)`
+                          }}
+                        >
+                          {getPieceSymbol(piece)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            {/* Right King Path (B9-B16) */}
+            <div className="king-path-right">
+              {Array(8).fill(null).map((_, index) => {
+                const pathPosition = 15 - index; // B9-B16 (bottom to top)
+                const blueKingHere = kingPositions[0] === pathPosition;
+                const redKingHere = kingPositions[1] === pathPosition;
+                const yellowKingHere = kingPositions[2] === pathPosition;
+                const greenKingHere = kingPositions[3] === pathPosition;
+                return (
+                  <div key={`right-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                    {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                    {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                    {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                    {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                    <span className="path-number">{pathPosition + 1}</span>
+                    {pathPosition === 15 && <div className="throne-label">👑</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          
+          {/* Bottom Row: Bottom-Left Corner, Bottom Path, Bottom-Right Corner */}
+          <div className="board-bottom-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Bottom-Left Corner Box - Between Green and Blue */}
+            <div className="corner-box corner-bottom-left">
+              {currentPlayer === 3 && (
+                <button className="skip-turn-btn skip-turn-green" onClick={skipTurn} title="Skip Turn">
+                  ➡️
+                </button>
+              )}
+            </div>
+            {/* Bottom King Path (B1-B8) - Blue Player */}
+            <div className="king-path-bottom">
+              {Array(8).fill(null).map((_, index) => {
+                const pathPosition = index; // B1-B8 (left to right)
+                const blueKingHere = kingPositions[0] === pathPosition;
+                const redKingHere = kingPositions[1] === pathPosition;
+                const yellowKingHere = kingPositions[2] === pathPosition;
+                const greenKingHere = kingPositions[3] === pathPosition;
+                return (
+                  <div key={`bottom-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
+                    {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
+                    {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
+                    {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
+                    {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
+                    <span className="path-number">{pathPosition + 1}</span>
+                    {pathPosition === 7 && <div className="throne-label">👑</div>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Bottom-Right Corner Box - Between Blue and Red */}
+            <div className="corner-box corner-bottom-right">
+              {currentPlayer === 0 && (
+                <button className="skip-turn-btn skip-turn-blue" onClick={skipTurn} title="Skip Turn">
+                  ⬆️
+                </button>
+              )}
+            </div>
           </div>
         </div>
-        {/* Bottom King Path (B1-B8) - Blue Player */}
-        <div className="king-path-bottom">
-          {Array(8).fill(null).map((_, index) => {
-            const pathPosition = index; // B1-B8 (left to right)
-            const blueKingHere = kingPositions[0] === pathPosition;
-            const redKingHere = kingPositions[1] === pathPosition;
-            const yellowKingHere = kingPositions[2] === pathPosition;
-            const greenKingHere = kingPositions[3] === pathPosition;
-            return (
-              <div key={`bottom-${index}`} className={`king-path-square ${getPathColorClass(pathPosition)}`}>
-                {blueKingHere && <div className="king-piece" style={{color: TEAM_COLORS[0]}}>♔</div>}
-                {redKingHere && <div className="king-piece" style={{color: TEAM_COLORS[1]}}>♔</div>}
-                {yellowKingHere && <div className="king-piece" style={{color: TEAM_COLORS[2]}}>♔</div>}
-                {greenKingHere && <div className="king-piece" style={{color: TEAM_COLORS[3]}}>♔</div>}
-                <span className="path-number">{pathPosition + 1}</span>
-                {pathPosition === 7 && <div className="throne-label">👑</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
       </div>
 
-      {(gamePhase === 'victory' || kingProgress.some(progress => progress >= 40)) && (
+      {/* Queen Kill Modal */}
+      {showQueenKillModal && killedQueenTeam && (
+        <div className="queen-kill-modal">
+          <div className="queen-kill-content">
+            <h2>⚔️ QUEEN KILLED! ⚔️</h2>
+            <p>{killedQueenTeam.toUpperCase()} Queen has been eliminated!</p>
+            <div className="queen-icon">👑</div>
+          </div>
+        </div>
+      )}
+
+      {/* Throne Modal */}
+      {showThroneModal && throneTeam && (
+        <div className="throne-modal">
+          <div className="throne-content">
+            <h2>🏰 REACHING THRONE! 🏰</h2>
+            <p>{throneTeam.toUpperCase()} King is approaching the throne!</p>
+            <div className="throne-icon">👑</div>
+          </div>
+        </div>
+      )}
+
+      {gamePhase === 'victory' && winningPlayer !== null && (
         <div className="victory-modal">
           <div className="victory-content">
             <h2>🎉 VICTORY! 🎉</h2>
-            <p>Player {TEAMS[winningPlayer || kingProgress.findIndex(progress => progress >= 40)]?.toUpperCase()} wins!</p>
+            <p>Player {TEAMS[winningPlayer].toUpperCase()} wins!</p>
             <button onClick={initializeBoard}>Play Again</button>
           </div>
         </div>
