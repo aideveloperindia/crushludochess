@@ -2310,7 +2310,7 @@
   }
   
   .player-info-container {
-    width: 100px;
+    width: 50px; /* HALF the breadth (was 100px) */
     height: 70px;
     font-size: 0.6em;
     padding: 5px;
@@ -2318,8 +2318,8 @@
   
   .player-info-red,
   .player-info-green {
-    right: -100px;
-    left: -100px;
+    right: -50px; /* HALF the breadth (was -100px) */
+    left: -50px; /* HALF the breadth (was -100px) */
   }
   
   .player-info-blue,
@@ -2341,8 +2341,8 @@
   }
   
   .chess-square {
-    width: 28px;
-    height: 28px;
+    width: 20px; /* SAME as king path boxes */
+    height: 20px; /* SAME as king path boxes */
   }
   
   .piece {
@@ -2379,7 +2379,7 @@
   }
   
   .player-info-container {
-    width: 80px;
+    width: 40px; /* HALF the breadth (was 80px) */
     height: 60px;
     font-size: 0.5em;
     padding: 4px;
@@ -2387,8 +2387,8 @@
   
   .player-info-red,
   .player-info-green {
-    right: -80px;
-    left: -80px;
+    right: -40px; /* HALF the breadth (was -80px) */
+    left: -40px; /* HALF the breadth (was -80px) */
   }
   
   .player-info-blue,
@@ -2410,8 +2410,8 @@
   }
   
   .chess-square {
-    width: 24px;
-    height: 24px;
+    width: 18px; /* SAME as king path boxes */
+    height: 18px; /* SAME as king path boxes */
   }
   
   .piece {
@@ -2432,7 +2432,7 @@
   }
   
   .player-info-container {
-    width: 50px;
+    width: 25px; /* HALF the breadth (was 50px) */
     height: 35px;
     font-size: 0.3em;
     padding: 2px;
@@ -2440,8 +2440,8 @@
   
   .player-info-red,
   .player-info-green {
-    right: -50px;
-    left: -50px;
+    right: -25px; /* HALF the breadth (was -50px) */
+    left: -25px; /* HALF the breadth (was -50px) */
   }
   
   .player-info-blue,
@@ -2463,8 +2463,8 @@
   }
   
   .chess-square {
-    width: 16px;
-    height: 16px;
+    width: 12px; /* SAME as king path boxes (was 16px) */
+    height: 12px; /* SAME as king path boxes (was 16px) */
   }
   
   .piece {
@@ -2491,7 +2491,7 @@
   }
   
   .player-info-container {
-    width: 40px;
+    width: 20px; /* HALF the breadth (was 40px) */
     height: 25px;
     font-size: 0.25em;
     padding: 1px;
@@ -2499,8 +2499,8 @@
   
   .player-info-red,
   .player-info-green {
-    right: -40px;
-    left: -40px;
+    right: -20px; /* HALF the breadth (was -40px) */
+    left: -20px; /* HALF the breadth (was -40px) */
   }
   
   .player-info-blue,
@@ -2522,8 +2522,8 @@
   }
   
   .chess-square {
-    width: 14px;
-    height: 14px;
+    width: 10px; /* SAME as king path boxes (was 14px) */
+    height: 10px; /* SAME as king path boxes (was 14px) */
   }
   
   .piece {
