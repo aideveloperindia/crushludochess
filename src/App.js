@@ -1025,14 +1025,16 @@ function App() {
           nextPos = startingPosition + nextProgress - 1;
           if (nextPos >= 32) nextPos = nextPos - 32; // Wrap around
         } else if (nextProgress === 33) {
-          // Transition from 32-box path to home stretch (Box 0)
-          nextPos = 0; // Box 0 (position 0)
+          // Transition from 32-box path to home stretch - go to team's initial position
+          const startingPosition = getKingStartingPosition(playerIndex);
+          nextPos = startingPosition; // Each king goes to their own initial position
           // Play 32-box completion sound
           playSound('32-box-complete');
         } else {
-          // In home stretch - move towards home position
+          // In home stretch - move towards home position from team's initial position
           const homeStretchMoves = nextProgress - 32;
-          nextPos = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
+          const startingPosition = getKingStartingPosition(playerIndex);
+          nextPos = startingPosition + homeStretchMoves - 1; // Start from team's initial position
         }
         
         // Update king position
@@ -1124,9 +1126,9 @@ function App() {
         }
       } else if (newProgress <= 40) {
         // Home stretch phase (33-40 progress)
-        // After 32 boxes, continue from Box 0 onwards
+        // After 32 boxes, continue from each team's initial position onwards
         const homeStretchMoves = newProgress - 32;
-        newPosition = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
+        newPosition = startingPosition + homeStretchMoves - 1; // Start from team's initial position
         
         // Play 32-box completion sound when entering home stretch
         if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
