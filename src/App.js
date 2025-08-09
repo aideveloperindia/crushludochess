@@ -1148,14 +1148,16 @@ function App() {
           nextPos = startingPosition + nextProgress - 1;
           if (nextPos >= 32) nextPos = nextPos - 32; // Wrap around
         } else if (nextProgress === 33) {
-          // Transition from 32-box path to home stretch (Box 0)
-          nextPos = 0; // Box 0 (position 0)
+          // Transition from 32-box path to team-specific starting box
+          const startingPosition = getKingStartingPosition(playerIndex);
+          nextPos = startingPosition;
           // Play 32-box completion sound
           playSound('32-box-complete');
         } else {
-          // In home stretch - move towards home position
-          const homeStretchMoves = nextProgress - 32;
-          nextPos = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
+          // Team-specific home stretch: continue forward from starting box up to 8 boxes
+          const startingPosition = getKingStartingPosition(playerIndex);
+          const stepsFromStart = nextProgress - 33; // 0..7
+          nextPos = (startingPosition + stepsFromStart) % 32;
         }
         
         // Update king position
@@ -1173,8 +1175,8 @@ function App() {
         
         console.log(`Step ${currentStep + 1}: ${TEAMS[playerIndex]} king moved to position ${nextPos}, progress: ${nextProgress}`);
         
-        // Check for immediate victory when king reaches throne box (Box 7, position 7)
-        if (nextPos === 7 && nextProgress >= 40) {
+        // Check for immediate victory when king reaches throne box (team-specific)
+        if (nextPos === getKingHomePosition(playerIndex) && nextProgress >= 40) {
           console.log(`VICTORY! ${TEAMS[playerIndex]} king reached throne box!`);
           setWinningPlayer(playerIndex);
           setGamePhase('victory');
@@ -1257,9 +1259,9 @@ function App() {
         }
       } else if (newProgress <= 40) {
         // Home stretch phase (33-40 progress)
-        // After 32 boxes, continue from Box 0 onwards
-        const homeStretchMoves = newProgress - 32;
-        newPosition = homeStretchMoves - 1; // Box 0 (position 0), Box 1 (position 1), etc.
+        // After 32 boxes, continue from the team's own starting box onwards
+        const homeStretchMoves = newProgress - 32; // 1..8
+        newPosition = (startingPosition + (homeStretchMoves - 1)) % 32;
         
         // Play 32-box completion sound when entering home stretch
         if (newKingProgress[playerIndex] <= 32 && newProgress > 32) {
@@ -1304,8 +1306,8 @@ function App() {
     console.log(`Updated king progress:`, newKingProgress);
     
     // Check for victory (40 total moves: 32 full round + 8 home stretch)
-    // Victory is only declared when king reaches throne box (position 7) with progress >= 40
-    if (newKingProgress[playerIndex] >= 40 && newKingPositions[playerIndex] === 7) {
+    // Victory is only declared when king reaches team-specific throne box with progress >= 40
+    if (newKingProgress[playerIndex] >= 40 && newKingPositions[playerIndex] === getKingHomePosition(playerIndex)) {
       setWinningPlayer(playerIndex); // Set the actual winner
       setGamePhase('victory');
       playSound('victory');
