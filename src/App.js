@@ -1451,6 +1451,32 @@ function App() {
     setGamePhase('setup');
     setIsCascading(false);
     setAppPhase('game-splash');
+
+    // Initialize player names based on game mode
+    const newPlayerNames = ['', '', '', '']; // Start with empty names for all players
+    
+    switch (mode.id) {
+      case '1player':
+        // Only Blue is human, others are AI
+        newPlayerNames[1] = AI_NAMES[1][0]; // Red = Arjun
+        newPlayerNames[2] = AI_NAMES[1][1]; // Yellow = Priya
+        newPlayerNames[3] = AI_NAMES[1][2]; // Green = Vikram
+        break;
+      case '2player':
+        // Blue and Yellow are human, Red and Green are AI
+        newPlayerNames[1] = AI_NAMES[2][0]; // Red = Rahul
+        newPlayerNames[3] = AI_NAMES[2][1]; // Green = Zara
+        break;
+      case '3player':
+        // Blue, Red, and Yellow are human, Green is AI
+        newPlayerNames[3] = AI_NAMES[3][0]; // Green = Krishna
+        break;
+      case '4player':
+        // All players are human - keep all names empty for player input
+        break;
+    }
+    
+    setPlayerNames(newPlayerNames);
   };
 
   const handleGameSplashComplete = () => {
